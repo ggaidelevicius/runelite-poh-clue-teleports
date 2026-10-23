@@ -4,37 +4,44 @@ A RuneLite companion plugin that keeps one POH teleport recommendation visible f
 
 It compares travel available through fixtures in your own player-owned house. Once the menus for detected facilities have been learned, the overlay identifies the best available POH destination or fairy ring code and shows estimated running time and walking tiles to the clue. Inventory items, standalone spellbook teleports, and travel facilities outside the POH are outside the plugin's scope.
 
-## Automatic availability
+## Setup and supported facilities
 
-With the plugin enabled, enter your own POH through **Home** or **Teleport to House**. The plugin first observes the loaded house fixtures over two game ticks, then lists only the installed facilities whose menus still need learning. Open the listed menus for two game ticks (about 1.2 seconds). There is no import button or manual destination selection. Each character needs an initial house observation before recommendations are shown.
+**You do not need any particular POH facility.** The plugin uses whichever supported facilities it detects in your own house. Every facility below contributes its usable destinations to the same teleport comparison.
 
-- **Portal nexus:** reads the installed slots, live destination names, and diary alternatives from the open teleport menu.
-- **Fairy rings:** opening the code selector learns ordinary destinations even if you have never visited them, then applies quest and regional access checks. The travel log alone is not treated as the unlock list. BJR, AKP, and CJQ have conservative partial-quest or island-access checks; they may be withheld until quest completion or a first successful trip.
-- **Spirit trees:** reads the old or new travel menu, including which planted and quest destinations the game disables or omits.
-- **Jewellery box:** reads the built box tier and individual destination locks directly from the menu. Downgrading the box removes the unavailable tiers on the next read.
+The setup steps depend on how destinations are learned: some facilities need their travel menu opened, while others are read directly from the loaded house fixture.
 
-Other POH fixtures are detected automatically while their rooms are loaded in your positively identified own house. Walk through those rooms and leave them loaded for two game ticks. Open the mounted digsite pendant and Xeric's talisman teleport menus too, so the plugin can read their server-side destination locks. No manual import is needed.
+1. With the plugin enabled, enter your own POH through **Home** or **Teleport to House**.
+2. Walk through the rooms containing your travel facilities. The plugin detects and observes loaded fixtures over two stable game ticks, about 1.2 seconds once loaded.
+3. If the overlay lists a facility as **Not learned**, open that facility's travel menu, or its code selector for a fairy ring, and leave it open for two stable game ticks. Recommendations begin once every menu listed for your house has been learned.
 
-| POH facility | Availability |
-| --- | --- |
-| Wilderness obelisk | Its six fixed arrivals, once the collected Wilderness Hard Diary reward allows choosing a destination. Random-only activation is excluded. |
-| Portal chambers | The installed fixed portal destinations, including supported diary alternatives. |
-| Mounted glory | Edgeville, Karamja, Draynor Village, and Al Kharid. |
-| Mounted digsite pendant | The Digsite and the account's unlocked Fossil Island and Lithkren destinations. |
-| Mounted Xeric's talisman | The account's unlocked talisman destinations. |
-| Mounted mythical cape | Myths' Guild. |
-| Cape hanger | Teleports provided by the actual mounted cape, including supported skill, quest, music, and max cape variants. Decorative capes add no destinations. Limited daily teleports are checked again before recommending them. |
-| House exit portal | The house's configured outside location. |
+The checklist includes only detected facilities that need menu reading. For example, a house with a mounted glory and no menu-based facilities can start recommending after the room is observed, without opening any travel menus. There is no manual import or destination selection.
 
-Only positively detected menu facilities become checklist requirements: fairy ring, spirit tree, portal nexus, jewellery box, mounted digsite pendant, and mounted Xeric's talisman. Unbuilt facilities do not need a menu opened. Other fixtures are learned directly from the scene. A fixture that has not been seen is not assumed to be built. A distant, unloaded room cannot erase a previously learned fixture. Portal chambers and cape hangers may occupy multiple rooms. Their saved arrivals are tracked by fixture position, so a replacement or removal on a loaded tile updates that position while unloaded rooms retain their last observation.
+| POH facility | How to learn its destinations | Available destinations |
+| --- | --- | --- |
+| Cape hanger | Observe the loaded fixture; no menu opening needed. | Teleports provided by the actual mounted cape, including supported skill, quest, music, and max cape variants. Decorative capes add no destinations. Limited daily teleports are checked again before recommending them. |
+| Fairy ring | Open the code selector. | Ordinary destinations, including unvisited codes, filtered by quest and regional access checks. |
+| House exit portal | Observe the loaded fixture; no menu opening needed. | The house's configured outside location. |
+| Jewellery box | Open its teleport menu. | Destinations allowed by the built box tier and the account's individual destination locks. |
+| Mounted digsite pendant | Open its teleport menu. | The Digsite and the account's unlocked Fossil Island and Lithkren destinations. |
+| Mounted glory | Observe the loaded fixture; no menu opening needed. | Edgeville, Karamja, Draynor Village, and Al Kharid. |
+| Mounted mythical cape | Observe the loaded fixture; no menu opening needed. | Myths' Guild. |
+| Mounted Xeric's talisman | Open its teleport menu. | The account's unlocked talisman destinations. |
+| Portal chambers | Observe the loaded fixtures; no menu opening needed. | The installed fixed portal destinations, including supported diary alternatives. |
+| Portal nexus | Open its teleport menu. | Installed destination slots, live destination names, and supported diary alternatives. |
+| Spirit tree | Open its travel menu. | Planted and quest destinations enabled in the old or new travel menu. |
+| Wilderness obelisk | Observe the loaded fixture; no menu opening needed. | Its six fixed arrivals, once the collected Wilderness Hard Diary reward allows choosing a destination. Random-only activation is excluded. |
+
+Fairy ring availability comes from the code selector and account access checks, rather than travel-log history. BJR, AKP, and CJQ have conservative partial-quest or island-access checks; they may be withheld until quest completion or a first successful trip.
+
+Each character needs an initial house observation before recommendations are shown. A combined spirit tree and fairy ring supplies both sources. Rooms discovered later add their facilities to the comparison and, where needed, extend the menu checklist. A fixture that has not been seen is not assumed to be built. A distant, unloaded room cannot erase a previously learned fixture. Portal chambers and cape hangers may occupy multiple rooms; their saved arrivals are tracked by fixture position, so a replacement or removal on a loaded tile updates that position while unloaded rooms retain their last observation.
 
 The plugin saves separate snapshots for each source and RuneScape character. Reopening a menu compares its complete available set with the saved set. Additions and removals update that source; identical sets do not trigger another save. Closed, incomplete, hidden, or changing menus leave the previous snapshot intact. Saved availability remains usable between house visits, sessions, and world hops.
 
-There is no sidebar. Before the first house observation, the overlay asks for a house visit instead of showing a premature four-source checklist. After that, the checklist shows **Learned** or **Not learned** for detected menu facilities only. A combined spirit tree and fairy ring supplies both sources. The plugin remembers detected fixtures per character; rooms discovered later extend the checklist. Loaded replacements and removals update it, while unloaded rooms preserve their last observation. Changes to a known jewellery box tier invalidate its old capabilities and require learning its menu again.
+There is no sidebar. Before the first house observation, the overlay asks for a house visit. Any subsequent checklist shows **Learned** or **Not learned** for the detected facilities that need menu reading. Changes to a known jewellery box tier invalidate its old capabilities and require learning its menu again.
 
 Amber outlines identify an open interface while it is being read. Once learning is complete, cyan outlines identify the recommended destination in an open nexus, jewellery, spirit tree, or mounted jewellery menu. Fairy ring and portal nexus guidance bring the recommended existing entry into view once when the menu opens or the recommendation changes, then highlight that entry. Subsequent manual scrolling is preserved. Fairy ring guidance also synchronizes its native saved scroll position so menu refreshes retain it. If the entry is unavailable, no fairy-ring interface guide is drawn; the main recommendation still shows the code. It never sets dial values or selects a teleport automatically. The overlay sizes itself to its current text, with a maximum width for long names. Guidance only draws in the positively identified own house and never clicks a control.
 
-A learned source with no available destinations still counts as learned. The checklist lists facilities, without individual destination checkboxes. Once the required menus are learned, it is replaced by the closest teleport. Setup guidance can appear in your house without an active clue; the recommendation itself follows the core clue state.
+A learned source with no available destinations still counts as learned. The checklist lists facilities, without individual destination checkboxes. Once all menus listed for your house are learned, the overlay shows the closest available teleport for the active clue. Setup guidance can appear in your house without an active clue; the recommendation itself follows the core clue state.
 
 House ownership is confirmed by an explicit own-house entry action followed by loading an actual POH region. Use the portal's **Home** option or **Teleport to House** after enabling the plugin; house tablets and construction cape POH teleports are supported too. No welcome chat message is required. Guest-house entry actions invalidate that confirmation. If you enable the plugin while already inside your house, leave and re-enter through one of these actions before learning menus. Opening a network outside your POH does not establish that you own its POH facility.
 
@@ -74,7 +81,7 @@ Start the development client yourself when ready:
 
 Source compiles to Java 11 bytecode, following the RuneLite plugin template. The macOS development task includes the native fullscreen adapter's required Java exports. The optional `gradle-local` helper uses a project-local JDK and Gradle cache when configured; `./gradle-local build --offline` works after dependencies have been cached.
 
-Enable **POH Clue Teleports** in the development client, enter your own house, and open only the detected travel menus to learn their available destinations. Read a clue with **Clue Scroll** enabled. The ordinary JAR at `build/libs/poh-clue-teleports-1.0.0.jar` is a development build artifact. Source and releases are published at [ggaidelevicius/runelite-poh-clue-teleports](https://github.com/ggaidelevicius/runelite-poh-clue-teleports). Plugin Hub distribution follows RuneLite's review and merge of the submitted source commit.
+Enable **POH Clue Teleports** in the development client, enter your own house, and open only the detected travel menus to learn their available destinations. Read a clue with **Clue Scroll** enabled. The ordinary JAR at `build/libs/poh-clue-teleports-1.0.0.jar` is a development build artifact. Source is available at [ggaidelevicius/runelite-poh-clue-teleports](https://github.com/ggaidelevicius/runelite-poh-clue-teleports). Updates use versioned source commits submitted to Plugin Hub, where RuneLite reviews and merges the commit pin.
 
 ## Manual verification
 
