@@ -1,0 +1,37 @@
+{
+  "upstream": "https://github.com/Skretzo/shortest-path",
+  "commit": "31c2e313a348a00fb49dfbee53461610681f94d6",
+  "format": "four-flags-per-tile",
+  "files": {
+    "collision-map.zip": {
+      "source": "src/main/resources/collision-map.zip",
+      "bytes": 1624418,
+      "sha256": "28a3b72d8e7167876c45b9eb557c5efc56896641d0c2eac66835e3442ec653de"
+    },
+    "transports.tsv": {
+      "source": "src/main/resources/transports/transports.tsv",
+      "bytes": 332364,
+      "sha256": "b50d1f93d554ea94c9bb1de640342c038d6cddccf1caf47f72dabdf6e0bb2619"
+    },
+    "agility_shortcuts.tsv": {
+      "source": "src/main/resources/transports/agility_shortcuts.tsv",
+      "bytes": 43970,
+      "sha256": "35ea54fc552907406b1ca952c944da617a2457509c9911ce67b38c2b1dfe0814"
+    },
+    "item-variations.tsv": {
+      "source": "src/main/resources/item-variations.tsv",
+      "bytes": 5237,
+      "sha256": "3a0456b5f8c79f39b9ba66408005e7a9f4dd2e129d1d403b735ce29b425713d8"
+    },
+    "config-items.tsv": {
+      "source": "src/main/resources/config-items.tsv",
+      "bytes": 13503,
+      "sha256": "239cccebef1f3eb321386a626ba27d825226eb42df7f5419a89026e51e3efe5e"
+    },
+    "UPSTREAM-LICENSE.txt": {
+      "source": "LICENSE",
+      "bytes": 1330,
+      "sha256": "7fd99cacafef8e453c0e43aa9c07d34cabbd0048d32e237340a5868c2c554ff7"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+.gradle/
+build/
+.gradle-user-home/
+.tools/
+.idea/
+*.iml
+.DS_Store
+.upstream/

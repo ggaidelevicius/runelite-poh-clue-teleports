@@ -1,0 +1,11 @@
+#!/bin/sh
+# Use this project's local JDK/cache without changing system settings.
+set -eu
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -z "${JAVA_HOME:-}" ] && [ -d "$project_dir/.tools/jdk/Contents/Home" ]; then
+	JAVA_HOME="$project_dir/.tools/jdk/Contents/Home"
+	export JAVA_HOME
+fi
+GRADLE_USER_HOME="${GRADLE_USER_HOME:-$project_dir/.gradle-user-home}"
+export GRADLE_USER_HOME
+exec "$project_dir/gradlew" --project-dir "$project_dir" "$@"
