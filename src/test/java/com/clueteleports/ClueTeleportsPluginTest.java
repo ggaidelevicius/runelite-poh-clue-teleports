@@ -19,6 +19,7 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.Player;
 import net.runelite.api.Scene;
+import net.runelite.api.ScriptEvent;
 import net.runelite.api.Tile;
 import net.runelite.api.GameObject;
 import net.runelite.api.ObjectComposition;
@@ -29,6 +30,9 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.ScriptPreFired;
+import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.VarbitID;
@@ -642,6 +646,99 @@ public class ClueTeleportsPluginTest
 
 		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
 		assertFalse(plugin.getGuidance().isOwnHouse());
+	}
+
+	@Test
+	public void renamedXericMenuLearnsOriginalUnlocksAfterTwoReadings() throws Exception
+	{
+		prepareFreshMountedSource(ObjectID.POH_AMULET_XERIC);
+		openRenamedNativeMenu(InterfaceID.Menu.LJ_LAYER1, "Xeric's Talisman teleports",
+			"Xeric's Lookout", "Xeric's Glade", "Xeric's Inferno", "Xeric's Heart",
+			"<str>Xeric's Honour</str>", "Nowhere");
+		tick();
+		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
+		tick();
+		assertEquals(Set.of("xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart"),
+			AvailableTeleports.decode(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN)));
+		assertNull(cachedSource(TeleportSource.MOUNTED_DIGSITE_PENDANT));
+	}
+
+	@Test
+	public void renamedDigsiteMenuRetainsNativeLocksInTheModernInterface() throws Exception
+	{
+		prepareFreshMountedSource(ObjectID.POH_AMULET_DIGSITE);
+		openRenamedNativeMenu(InterfaceID.MenuNew.TEXT, "Digsite Pendant teleport",
+			"Digsite", "Fossil Island", "<str>Lithkren</str>", "Nowhere");
+		tick();
+		assertNull(cachedSource(TeleportSource.MOUNTED_DIGSITE_PENDANT));
+		tick();
+		assertEquals(Set.of("digsite-digsite", "digsite-fossil-island"),
+			AvailableTeleports.decode(cachedSource(TeleportSource.MOUNTED_DIGSITE_PENDANT)));
+		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
+	}
+
+	@Test
+	public void closedMenuCannotReuseOriginalLabelsWhenTheSameWidgetObjectsReturn() throws Exception
+	{
+		prepareFreshMountedSource(ObjectID.POH_AMULET_XERIC);
+		openRenamedNativeMenu(InterfaceID.Menu.LJ_LAYER1, "Xeric's Talisman teleports",
+			"Xeric's Lookout", "Xeric's Glade", "Xeric's Inferno", "Xeric's Heart",
+			"Xeric's Honour", "Nowhere");
+		plugin.onWidgetClosed(new WidgetClosed(InterfaceID.MENU, 0, true));
+		tick();
+		tick();
+		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
+	}
+
+	@Test
+	public void guestMenuOriginalInputsCannotTeachMountedUnlocks() throws Exception
+	{
+		prepareFreshMountedSource(ObjectID.POH_AMULET_XERIC);
+		clickEntry("Friend's house", "<col=00ffff>Portal</col>", MenuAction.GAME_OBJECT_THIRD_OPTION, 0);
+		changeGameState(GameState.LOADING);
+		changeGameState(GameState.LOGGED_IN);
+		openRenamedNativeMenu(InterfaceID.Menu.LJ_LAYER1, "Xeric's Talisman teleports",
+			"Xeric's Lookout", "Xeric's Glade", "Xeric's Inferno", "Xeric's Heart",
+			"Xeric's Honour", "Nowhere");
+		tick();
+		tick();
+		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
+		assertFalse(plugin.getGuidance().isOwnHouse());
+	}
+
+	private void prepareFreshMountedSource(int objectId) throws Exception
+	{
+		config.unsetRSProfileConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, ClueTeleportsPlugin.HOUSE_INVENTORY_KEY);
+		for (TeleportSource source : TeleportSource.values())
+		{
+			config.unsetRSProfileConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, source.getCacheKey());
+		}
+		placeFixture(objectId, "Mounted teleport");
+		enterOwnHouse();
+		tick();
+	}
+
+	private void openRenamedNativeMenu(int component, String title, String... originals)
+	{
+		int script = component == InterfaceID.Menu.LJ_LAYER1 ? 217 : 9142;
+		Object[] arguments = script == 217
+			? new Object[]{script, title, String.join("|", originals), 1}
+			: new Object[]{script, 1, title, String.join("|", originals), 0, 0, 0};
+		ScriptPreFired pre = new ScriptPreFired(script);
+		pre.setScriptEvent(proxy(ScriptEvent.class, (proxy, method, args) ->
+		{
+			if ("getArguments".equals(method.getName())) return arguments;
+			throw new AssertionError("Unexpected script event call: " + method.getName());
+		}));
+		plugin.onScriptPreFired(pre);
+		Widget[] rows = new Widget[originals.length];
+		for (int index = 0; index < rows.length; index++)
+		{
+			rows[index] = MenuReaderFixture.widget("<col=ff00ff>Custom destination</col>",
+				0x808080, false, new Widget[0], component, index, null);
+		}
+		extraWidgets.put(component, MenuReaderFixture.widget("", 0, false, rows, component, -1, null));
+		plugin.onScriptPostFired(new ScriptPostFired(script));
 	}
 
 	@Test

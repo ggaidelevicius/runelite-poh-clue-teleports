@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import net.runelite.api.ScriptEvent;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import org.junit.Test;
@@ -169,6 +170,89 @@ public class JewelleryBoxReaderTest
 		menu(3, locked);
 		assertTrue(JewelleryBoxReader.readOpenMenu(fixture.client).isPresent());
 		assertTrue(JewelleryBoxReader.readOpenMenu(fixture.client).get().isEmpty());
+	}
+
+	@Test
+	public void nativeOperationsIdentifyArbitraryNamesAndColorsAcrossEverySection()
+	{
+		menu(3, Collections.emptySet());
+		int destination = 0;
+		for (int section = 0; section < COMPONENTS.length; section++)
+		{
+			List<Widget> rows = new ArrayList<>();
+			rows.add(MenuReaderFixture.text(HEADERS[section]));
+			for (int index = 0; index < NAMES[section].length; index++)
+			{
+				rows.add(nativeRow(section, index, destination++, "<col=808080>" + HEADERS[section] + "</col>",
+					NAMES[section][index]));
+			}
+			// Visual order and duplicate replacement names are not identity.
+			Collections.reverse(rows);
+			fixture.widgets.put(COMPONENTS[section], MenuReaderFixture.container(rows.toArray(new Widget[0])));
+		}
+		assertEquals(27, JewelleryBoxReader.readOpenMenu(fixture.client).get().size());
+	}
+
+	@Test
+	public void nativeLocksSurviveCosmeticReplacementsThatRemoveTheirMarkup()
+	{
+		menu(1, Collections.emptySet());
+		fixture.widgets.put(COMPONENTS[0], MenuReaderFixture.container(
+			MenuReaderFixture.text(HEADERS[0]),
+			nativeRow(0, 0, 0, "Arena", "Emir's Arena"),
+			nativeRow(0, 1, 1, "Bank", "Castle Wars"),
+			nativeRow(0, 2, 2, "Restore", "Ferox Enclave"),
+			nativeRow(0, 3, 3, "Colosseum", "<str>Fortis Colosseum</str>")));
+		Set<String> available = JewelleryBoxReader.readOpenMenu(fixture.client).get();
+		assertEquals(8, available.size());
+		assertFalse(available.contains("jewellery-fortis-colosseum"));
+		assertFalse(available.contains("jewellery-edgeville"));
+	}
+
+	@Test
+	public void malformedOrMismatchedNativeOperationsCannotAuthorizeAReplacement()
+	{
+		Object[][] invalid = {
+			{1691, ScriptEvent.MENU_OP, 0, COMPONENTS[0], 0, "Emir's Arena", "1", ""},
+			{1690, 1, 0, COMPONENTS[0], 0, "Emir's Arena", "1", ""},
+			{1690, ScriptEvent.MENU_OP, 27, COMPONENTS[0], 0, "Emir's Arena", "1", ""},
+			{1690, ScriptEvent.MENU_OP, 0, COMPONENTS[1], 0, "Emir's Arena", "1", ""},
+			{1690, ScriptEvent.MENU_OP, 0, COMPONENTS[0], 99, "Emir's Arena", "1", ""},
+			{1690, ScriptEvent.MENU_OP, 0, COMPONENTS[0], 0, "Castle Wars", "1", ""},
+			{1690, ScriptEvent.MENU_OP, 0, COMPONENTS[0], 0, "Emir's Arena", null, ""},
+			{1690, ScriptEvent.MENU_OP}
+		};
+		for (Object[] listener : invalid)
+		{
+			menu(1, Collections.emptySet());
+			Widget invalidRow = MenuReaderFixture.widget("Emir's Arena", 0xffffff, false,
+				new Widget[0], COMPONENTS[0], 0, listener);
+			fixture.widgets.put(COMPONENTS[0], MenuReaderFixture.container(
+				MenuReaderFixture.text(HEADERS[0]), invalidRow,
+				MenuReaderFixture.text("Castle Wars"), MenuReaderFixture.text("Ferox Enclave"),
+				MenuReaderFixture.text("Fortis Colosseum")));
+			assertFalse(JewelleryBoxReader.readOpenMenu(fixture.client).isPresent());
+		}
+	}
+
+	@Test
+	public void duplicateNativeDestinationsDoNotSatisfyACompleteSection()
+	{
+		menu(1, Collections.emptySet());
+		fixture.widgets.put(COMPONENTS[0], MenuReaderFixture.container(
+			MenuReaderFixture.text(HEADERS[0]),
+			nativeRow(0, 0, 0, "First", "Emir's Arena"),
+			nativeRow(0, 1, 1, "Second", "Castle Wars"),
+			nativeRow(0, 2, 1, "Third", "Castle Wars"),
+			nativeRow(0, 3, 3, "Fourth", "Fortis Colosseum")));
+		assertFalse(JewelleryBoxReader.readOpenMenu(fixture.client).isPresent());
+	}
+
+	private Widget nativeRow(int section, int child, int destination, String display, String original)
+	{
+		Object[] listener = {1690, ScriptEvent.MENU_OP, destination, COMPONENTS[section], child,
+			"<col=ccccff>1:</col> " + original, "1", ""};
+		return MenuReaderFixture.widget(display, 0x808080, false, new Widget[0], COMPONENTS[section], child, listener);
 	}
 
 	@Test(expected = UnsupportedOperationException.class)

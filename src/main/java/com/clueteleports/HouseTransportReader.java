@@ -72,6 +72,11 @@ public final class HouseTransportReader
 	 */
 	public static Observation readSnapshot(Client client)
 	{
+		return readSnapshot(client, new NativeTeleportMenus());
+	}
+
+	static Observation readSnapshot(Client client, NativeTeleportMenus menus)
+	{
 		Map<TeleportSource, Set<String>> sources = new EnumMap<>(TeleportSource.class);
 		Map<String, Set<String>> portals = new LinkedHashMap<>();
 		Map<String, Set<String>> capes = new LinkedHashMap<>();
@@ -231,12 +236,12 @@ public final class HouseTransportReader
 		// [proc,menu_createentry], and [proc,menu_new_createentry] in runelite/cs2-scripts.
 		if (digsiteSeen)
 		{
-			readMountedMenu(client, DIGSITE_LABELS).ifPresent(ids ->
+			readMountedMenu(client, DIGSITE_LABELS, menus).ifPresent(ids ->
 				add(sources, TeleportSource.MOUNTED_DIGSITE_PENDANT, ids));
 		}
 		if (xericSeen)
 		{
-			readMountedMenu(client, XERIC_LABELS).ifPresent(ids ->
+			readMountedMenu(client, XERIC_LABELS, menus).ifPresent(ids ->
 				add(sources, TeleportSource.MOUNTED_XERICS_TALISMAN, ids));
 		}
 		return new Observation(sources, portals, capes, covered, installed, objectIds, installedIds);
@@ -306,15 +311,15 @@ public final class HouseTransportReader
 		return normalizedLabel == null ? null : XERIC_LABELS.get(normalizedLabel);
 	}
 
-	private static Optional<Set<String>> readMountedMenu(Client client, Map<String, String> labels)
+	private static Optional<Set<String>> readMountedMenu(Client client, Map<String, String> labels, NativeTeleportMenus menus)
 	{
-		Optional<Set<String>> current = readMountedMenu(client.getWidget(InterfaceID.MenuNew.TEXT), labels);
-		return current.isPresent() ? current : readMountedMenu(client.getWidget(InterfaceID.Menu.LJ_LAYER1), labels);
+		Optional<Set<String>> current = readMountedMenu(client.getWidget(InterfaceID.MenuNew.TEXT), labels, menus);
+		return current.isPresent() ? current : readMountedMenu(client.getWidget(InterfaceID.Menu.LJ_LAYER1), labels, menus);
 	}
 
-	private static Optional<Set<String>> readMountedMenu(Widget container, Map<String, String> labels)
+	private static Optional<Set<String>> readMountedMenu(Widget container, Map<String, String> labels, NativeTeleportMenus menus)
 	{
-		if (container == null || container.isHidden())
+		if (container == null || container.isHidden() && !menus.hasCapturedMenu(container))
 		{
 			return Optional.empty();
 		}
@@ -332,7 +337,7 @@ public final class HouseTransportReader
 			{
 				return Optional.empty();
 			}
-			String raw = row.getText();
+			String raw = menus.text(row);
 			if (raw == null || raw.trim().isEmpty())
 			{
 				if (row.isHidden())
@@ -355,7 +360,14 @@ public final class HouseTransportReader
 				return Optional.empty();
 			}
 			markup = markup.toLowerCase(Locale.ROOT);
-			if (!row.isHidden() && !markup.contains("<col=") && !markup.contains("<str"))
+			boolean locked = markup.contains("<col=") || markup.contains("<str");
+			if (row.isHidden() && !menus.isCaptured(row))
+			{
+				// A map/menu plugin may hide usable native rows. Without the
+				// original game input, this cannot prove an unlock was removed.
+				return Optional.empty();
+			}
+			if (!locked)
 			{
 				available.add(id);
 			}

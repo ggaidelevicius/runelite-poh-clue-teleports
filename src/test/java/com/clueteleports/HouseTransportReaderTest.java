@@ -327,7 +327,7 @@ public class HouseTransportReaderTest
 	}
 
 	@Test
-	public void completeNewXericMenuHandlesChordsAndHiddenLockedOption()
+	public void completeNewXericMenuHandlesChordsAndMarkedLockedOption()
 	{
 		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_XERIC)}, null, null);
 		fixture.widgets.put(InterfaceID.MenuNew.TEXT, MenuReaderFixture.container(
@@ -335,7 +335,7 @@ public class HouseTransportReaderTest
 			MenuReaderFixture.text("<col=ccccff>Ctrl+Q:</col> Xeric's Lookout"),
 			MenuReaderFixture.text("<col=ccccff>W</col>: Xeric's Glade"),
 			MenuReaderFixture.text("Xeric's Inferno"), MenuReaderFixture.text("4: Xeric's Heart"),
-			MenuReaderFixture.widget("5: <col=808080>Xeric's Honour</col>", 0xffffff, true, new Widget[0])));
+			MenuReaderFixture.widget("5: <col=808080>Xeric's Honour</col>", 0xffffff, false, new Widget[0])));
 
 		assertEquals(Set.of("xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart"),
 			read().sources.get(TeleportSource.MOUNTED_XERICS_TALISMAN));
@@ -368,12 +368,11 @@ public class HouseTransportReaderTest
 	}
 
 	@Test
-	public void districtNamedXericMenuPreservesStruckHiddenAndColouredChambersLocks()
+	public void districtNamedXericMenuPreservesStruckAndColouredChambersLocks()
 	{
 		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_XERIC)}, null, null);
 		Widget[] locked = {
 			MenuReaderFixture.text("5: <str>Chambers of Xeric</str>"),
-			MenuReaderFixture.widget("5: Chambers of Xeric", 0xffffff, true, new Widget[0]),
 			MenuReaderFixture.text("5: <col=808080>Chambers of Xeric</col>")};
 		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
 		{
@@ -385,6 +384,19 @@ public class HouseTransportReaderTest
 				assertEquals(Set.of("xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart"),
 					read().sources.get(TeleportSource.MOUNTED_XERICS_TALISMAN));
 			}
+		}
+	}
+
+	@Test
+	public void unexplainedHiddenXericRowDoesNotOverwriteItsSavedUnlocks()
+	{
+		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_XERIC)}, null, null);
+		for (String label : new String[]{"Chambers of Xeric", "<col=00ff00>Chambers of Xeric</col>",
+			"<str>Chambers of Xeric</str>"})
+		{
+			fixture.widgets.put(InterfaceID.Menu.LJ_LAYER1, districtXericMenu(
+				MenuReaderFixture.widget("5: " + label, 0xffffff, true, new Widget[0])));
+			assertFalse(read().sources.containsKey(TeleportSource.MOUNTED_XERICS_TALISMAN));
 		}
 	}
 

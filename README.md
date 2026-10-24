@@ -65,6 +65,12 @@ The companion follows the clue already identified by RuneLite. Read the clue onc
 
 Dynamic **Respawn** and **Teleport to Boat** portal targets, and Sailing cape teleports to owned boats, are excluded until their current arrival can be established reliably. The mounted Hunter cape's separately unlocked Hunter Guild teleport is currently excluded because its conversation unlock is not exposed in the available native state. Teleporting back inside the same house is not an onward clue destination.
 
+## Other teleport menu plugins
+
+Easy Teleports (listed under `easy-pharaoh-sceptre` in the Hub) can rename and recolor jewellery-box and mounted teleport options. Learning uses the original native destination data, including its locks, so custom names do not change what is available. Spirit-tree menu layouts and maps can also hide or rename rows without changing the learned network. Reopen the affected menu after enabling POH Clue Teleports to capture its native data.
+
+Guidance highlights visible native controls and Teleport Maps buttons for spirit trees, mounted Xeric’s talismans, and POH wilderness obelisks. Other custom map buttons are not highlighted, and filtered or hidden controls stay hidden. See the [pinned-source compatibility audit](docs/teleport-plugin-compatibility.md) for inspected plugins and verification limits.
+
 ## Build and try it
 
 Install JDK 17, then run the finite headless checks from this project's directory:
@@ -94,6 +100,7 @@ Automated tests do not establish live gameplay behavior. In a user-started devel
 5. Compare a clue on opposite sides of a wall or river, a dungeon clue, and an upstairs clue. Verify the chosen arrival follows a usable route. Repeat near an agility shortcut below its level, after a boost, and with any required diary/tool gate missing. Check the blood-rune challenge before and after completion, an unfinished hot/cold clue, and a three-step master clue.
 6. With an obelisk built, compare accounts with and without the collected Wilderness Hard Diary reward. Only deterministic destination selection should enter the comparison. Check a mounted cape after its limited daily teleports have been used.
 7. Disable and re-enable the plugin. Confirm the overlay cleans up and returns once, with no sidebar button. Re-enter the house before learning new menus.
+8. With **Teleport Maps** enabled, open the spirit-tree, mounted Xeric, and POH obelisk maps in both classic and modern menu styles. Confirm learning completes and the recommended destination gets one outline on its clickable map button. Check an unavailable destination, a custom Xeric name, and a closed/reopened map. Other players’ houses must not update your cache or show guidance.
 
 ## Sources
 

@@ -32,6 +32,11 @@ final class MenuReaderFixture
 
 	static Widget widget(String text, int color, boolean hidden, Widget[] children)
 	{
+		return widget(text, color, hidden, children, 0, 0, null);
+	}
+
+	static Widget widget(String text, int color, boolean hidden, Widget[] children, int component, int index, Object[] listener)
+	{
 		return (Widget) Proxy.newProxyInstance(Widget.class.getClassLoader(), new Class<?>[]{Widget.class},
 			(proxy, method, args) ->
 			{
@@ -39,6 +44,9 @@ final class MenuReaderFixture
 				{
 					case "getText": return text;
 					case "getTextColor": return color;
+					case "getOnOpListener": return listener;
+					case "getId": return component;
+					case "getIndex": return index;
 					case "isHidden": return hidden;
 					case "getDynamicChildren": return children;
 					default: throw new UnsupportedOperationException(method.getName());

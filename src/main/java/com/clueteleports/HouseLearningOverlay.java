@@ -27,7 +27,7 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.util.Text;
 
 /**
- * Read-only visual guidance over native POH travel controls.
+ * Read-only visual guidance over native POH controls and recognized Teleport Maps buttons.
  *
  * Native geometry uses Widget.getBounds. Menu containers follow the same cs2
  * scripts as the availability readers:
@@ -57,11 +57,18 @@ public final class HouseLearningOverlay extends Overlay
 
 	private final Client client;
 	private final Supplier<Guidance> guidance;
+	private final NativeTeleportMenus menus;
 
 	public HouseLearningOverlay(Client client, Supplier<Guidance> guidance)
 	{
+		this(client, guidance, new NativeTeleportMenus());
+	}
+
+	public HouseLearningOverlay(Client client, Supplier<Guidance> guidance, NativeTeleportMenus menus)
+	{
 		this.client = Objects.requireNonNull(client);
 		this.guidance = Objects.requireNonNull(guidance);
+		this.menus = Objects.requireNonNull(menus);
 		setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
 	}
@@ -129,6 +136,11 @@ public final class HouseLearningOverlay extends Overlay
 				open.put(TeleportSource.MOUNTED_XERICS_TALISMAN, genericClip(generic));
 			}
 		}
+		TeleportMapsGuidance.View map = TeleportMapsGuidance.read(client, menus);
+		if (map != null)
+		{
+			open.put(map.source, map.bounds);
+		}
 		for (TeleportSource pending : state.pendingSources)
 		{
 			Rectangle bounds = open.get(pending);
@@ -159,6 +171,14 @@ public final class HouseLearningOverlay extends Overlay
 				for (int component : BOX_SECTIONS)
 				{
 					addRows(result, client.getWidget(component), open.get(TeleportSource.JEWELLERY_BOX), selected);
+				}
+			}
+			else if (map != null && map.source == selected.getSource())
+			{
+				Widget button = map.destination(selected);
+				if (button != null)
+				{
+					addRectangle(result, button.getBounds(), map.bounds, RECOMMENDED, null);
 				}
 			}
 			else if (generic != null && (open.containsKey(selected.getSource())
@@ -215,25 +235,46 @@ public final class HouseLearningOverlay extends Overlay
 		}
 		for (Widget row : rows)
 		{
-			if (matchesAvailableRow(selected, row))
+			if (matchesMenuRow(selected, row))
 			{
 				addRectangle(marks, row.getBounds(), clip, RECOMMENDED, null);
 			}
 		}
 	}
 
+	private boolean matchesMenuRow(TeleportDestination selected, Widget row)
+	{
+		if (row == null) return false;
+		if (selected.getSource() == TeleportSource.JEWELLERY_BOX)
+		{
+			String label = JewelleryBoxReader.destinationLabel(row);
+			return label != null && (JewelleryBoxReader.hasNativeDestination(row)
+				? matchesAvailableRow(selected, row, label) : matchesAvailableRow(selected, row));
+		}
+		if (selected.getSource() != TeleportSource.PORTAL_NEXUS && menus.isCaptured(row))
+		{
+			return matchesAvailableRow(selected, row, menus.text(row));
+		}
+		return matchesAvailableRow(selected, row);
+	}
+
 	/** Scrolling and highlighting must agree on the existing enabled menu entry. */
 	static boolean matchesAvailableRow(TeleportDestination selected, Widget row)
 	{
-		if (selected == null || row == null || row.isHidden())
+		return row != null && row.getTextColor() != 0x7f7f7f && row.getTextColor() != 0x808080
+			&& matchesAvailableRow(selected, row, row.getText());
+	}
+
+	/** Native metadata retains availability locks when display names/colors are customized. */
+	static boolean matchesAvailableRow(TeleportDestination selected, Widget row, String authoritativeLabel)
+	{
+		if (selected == null || row == null || row.isHidden() || authoritativeLabel == null)
 		{
 			return false;
 		}
-		String label = stripKey(row.getText());
+		String label = stripKey(authoritativeLabel);
 		String markup = label.toLowerCase(Locale.ROOT);
-		return !markup.contains("<str") && !markup.contains("<col=")
-			&& row.getTextColor() != 0x7f7f7f && row.getTextColor() != 0x808080
-			&& matches(selected, label);
+		return !markup.contains("<str") && !markup.contains("<col=") && matches(selected, label);
 	}
 
 	static boolean matches(TeleportDestination selected, String row)
@@ -293,9 +334,12 @@ public final class HouseLearningOverlay extends Overlay
 		{
 			for (Widget row : rows)
 			{
-				if (row != null && !row.isHidden() && row.getText() != null && !row.getText().isBlank())
+				String label = row == null ? null : menus.text(row);
+				// Hidden disabled entries still identify a retained native menu;
+				// visibility is checked separately before drawing a destination.
+				if (label != null && !label.isBlank())
 				{
-					return normalize(stripKey(row.getText()));
+					return normalize(stripKey(label));
 				}
 			}
 		}
@@ -340,13 +384,16 @@ public final class HouseLearningOverlay extends Overlay
 		}
 	}
 
-	private static String stripKey(String text)
+	static String stripKey(String text)
 	{
 		if (text == null)
 		{
 			return "";
 		}
-		return KEY_PREFIX.matcher(COLORED_KEY_PREFIX.matcher(text.trim()).replaceFirst("")).replaceFirst("");
+		String raw = text.trim();
+		String withoutColoredKey = COLORED_KEY_PREFIX.matcher(raw).replaceFirst("");
+		// A destination may itself contain a colon. Strip one key prefix only.
+		return withoutColoredKey.equals(raw) ? KEY_PREFIX.matcher(raw).replaceFirst("") : withoutColoredKey;
 	}
 
 	private static String normalize(String text)

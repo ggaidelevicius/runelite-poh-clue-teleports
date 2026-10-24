@@ -90,6 +90,17 @@ public class TeleportCatalogTest
 	}
 
 	@Test
+	public void normalAncientTeleportFrozenWasteNameKeepsTheExistingNexusArrival()
+	{
+		TeleportDestination ghorrock = TeleportCatalog.byId("nexus-ghorrock").get();
+		assertEquals(ghorrock, TeleportCatalog.nexusDestination("Frozen Waste").get());
+		assertEquals(ghorrock, TeleportCatalog.nexusDestination("Ghorrock").get());
+		assertEquals(ghorrock, TeleportCatalog.nexusDestination("Frozen Waste Plateau (Ghorrock)").get());
+		assertEquals(TeleportSource.PORTAL_NEXUS, ghorrock.getSource());
+		assertEquals(new WorldPoint(2976, 3872, 0), ghorrock.getLocation());
+	}
+
+	@Test
 	public void allFortyFiveInstalledSlotsAreDistinctAndCannotBeMutatedByCallers()
 	{
 		int[] slots = TeleportCatalog.nexusSlotVarbits();

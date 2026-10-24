@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import net.runelite.api.Client;
+import net.runelite.api.ScriptEvent;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.util.Text;
@@ -82,7 +83,12 @@ public final class JewelleryBoxReader
 				{
 					continue;
 				}
-				String plain = Text.removeTags(raw).trim();
+				String original = destinationLabel(child);
+				if (original == null)
+				{
+					return Optional.empty();
+				}
+				String plain = Text.removeTags(original).trim();
 				if (section.header.equals(plain))
 				{
 					if (headerSeen || (child.getTextColor() != 0xffffff && child.getTextColor() != 0x7f7f7f))
@@ -96,7 +102,7 @@ public final class JewelleryBoxReader
 				// Native keys put the colon inside the color tag; wrappers may
 				// put it outside or replace the key with a chord. Remove only
 				// key markup, preserving the destination's strike/color locks.
-				String label = COLORED_KEY_PREFIX.matcher(raw.trim()).replaceFirst("");
+				String label = COLORED_KEY_PREFIX.matcher(original.trim()).replaceFirst("");
 				String name = KEY_PREFIX.matcher(Text.removeTags(label).trim()).replaceFirst("");
 				if (!section.destinations.contains(name) || !listed.add(name))
 				{
@@ -126,6 +132,61 @@ public final class JewelleryBoxReader
 			return Optional.empty();
 		}
 		return Optional.of(Collections.unmodifiableSet(available));
+	}
+
+	/**
+	 * Easy Teleports changes the displayed text, including arbitrary names and
+	 * colors, but leaves the native operation listener intact. Read its original
+	 * label (and strike locks), validating the operation's destination, section,
+	 * and child identity instead of guessing from a replacement label or position.
+	 * The listener layout is poh_jewellery_box_addbutton / poh_jewellery_box_op:
+	 * https://github.com/runelite/cs2-scripts/blob/1d418ffb6bce96c2d0712eb2652712d28e01b115/scripts/%5Bproc,poh_jewellery_box_addbutton%5D.cs2
+	 * Cosmetic replacements:
+	 * https://github.com/DapperMickie/easy-teleports/blob/2b18c2bfa57494185fdffbc93c9d91042a3b9cf5/src/main/java/com/duckblade/osrs/easyteleports/EasyTeleportsPlugin.java
+	 */
+	static String destinationLabel(Widget row)
+	{
+		Object[] listener = row.getOnOpListener();
+		return listener == null ? row.getText() : nativeDestinationLabel(row, listener);
+	}
+
+	static boolean hasNativeDestination(Widget row)
+	{
+		Object[] listener = row.getOnOpListener();
+		return listener != null && nativeDestinationLabel(row, listener) != null;
+	}
+
+	private static String nativeDestinationLabel(Widget row, Object[] listener)
+	{
+		if (listener.length != 8 || !Integer.valueOf(1690).equals(listener[0])
+			|| !Integer.valueOf(ScriptEvent.MENU_OP).equals(listener[1])
+			|| !(listener[2] instanceof Integer) || !(listener[3] instanceof Integer)
+			|| !(listener[4] instanceof Integer) || !(listener[5] instanceof String)
+			|| !(listener[6] instanceof String) || !(listener[7] instanceof String)
+			|| !Integer.valueOf(row.getId()).equals(listener[3])
+			|| !Integer.valueOf(row.getIndex()).equals(listener[4]))
+		{
+			return null;
+		}
+		int destinationIndex = (Integer) listener[2];
+		if (destinationIndex < 0)
+		{
+			return null;
+		}
+		String original = (String) listener[5];
+		String label = COLORED_KEY_PREFIX.matcher(original.trim()).replaceFirst("");
+		String name = KEY_PREFIX.matcher(Text.removeTags(label).trim()).replaceFirst("");
+		for (Section section : SECTIONS)
+		{
+			for (String expected : section.destinations)
+			{
+				if (destinationIndex-- == 0)
+				{
+					return section.component == row.getId() && expected.equals(name) ? original : null;
+				}
+			}
+		}
+		return null;
 	}
 
 	private static final class Section

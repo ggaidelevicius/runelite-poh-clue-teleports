@@ -41,13 +41,18 @@ public final class SpiritTreeReader
 	 */
 	public static Optional<Set<String>> readOpenMenu(Client client)
 	{
-		Optional<Set<String>> current = read(client.getWidget(InterfaceID.MenuNew.TEXT));
-		return current.isPresent() ? current : read(client.getWidget(InterfaceID.Menu.LJ_LAYER1));
+		return readOpenMenu(client, new NativeTeleportMenus());
 	}
 
-	private static Optional<Set<String>> read(Widget container)
+	static Optional<Set<String>> readOpenMenu(Client client, NativeTeleportMenus menus)
 	{
-		if (container == null || container.isHidden())
+		Optional<Set<String>> current = read(client.getWidget(InterfaceID.MenuNew.TEXT), menus);
+		return current.isPresent() ? current : read(client.getWidget(InterfaceID.Menu.LJ_LAYER1), menus);
+	}
+
+	private static Optional<Set<String>> read(Widget container, NativeTeleportMenus menus)
+	{
+		if (container == null || container.isHidden() && !menus.hasCapturedMenu(container))
 		{
 			return Optional.empty();
 		}
@@ -71,7 +76,7 @@ public final class SpiritTreeReader
 			{
 				return Optional.empty();
 			}
-			String raw = row.getText();
+			String raw = menus.text(row);
 			if (raw == null || raw.trim().isEmpty())
 			{
 				// MENU_NEW creates hidden empty framework entries. A visible
@@ -106,7 +111,14 @@ public final class SpiritTreeReader
 			// Disabled options carry gray markup. Treat other explicit status
 			// colors or strike markup conservatively as unavailable, too.
 			String markup = label.toLowerCase(Locale.ROOT);
-			if (!row.isHidden() && !markup.contains("<col=") && !markup.contains("<str"))
+			boolean locked = markup.contains("<col=") || markup.contains("<str");
+			if (row.isHidden() && !menus.isCaptured(row))
+			{
+				// Cosmetic map plugins hide native controls without changing
+				// account availability. Preserve the cache if provenance is lost.
+				return Optional.empty();
+			}
+			if (!locked)
 			{
 				available.add(id);
 			}

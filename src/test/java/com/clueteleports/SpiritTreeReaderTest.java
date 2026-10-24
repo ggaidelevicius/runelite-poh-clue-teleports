@@ -85,27 +85,25 @@ public class SpiritTreeReaderTest
 	}
 
 	@Test
-	public void hiddenDisabledRowsRemainListedButUnavailable()
+	public void hiddenRowsWithoutOriginalInputAreNotAuthoritative()
 	{
 		Widget[] rows = rows(new String[]{"Tree Gnome Village", "Gnome Stronghold",
 			"Battlefield of Khazard", "Grand Exchange", "Port Sarim"}, "735a28");
 		rows[4] = MenuReaderFixture.widget("<col=735a28>5</col>: <str>Port Sarim</str>",
 			0, true, new Widget[0]);
 		fixture.widgets.put(InterfaceID.Menu.LJ_LAYER1, MenuReaderFixture.container(rows));
-		Set<String> available = SpiritTreeReader.readOpenMenu(fixture.client).get();
-		assertEquals(4, available.size());
-		assertFalse(available.contains("tree-port-sarim"));
+		assertFalse(SpiritTreeReader.readOpenMenu(fixture.client).isPresent());
 	}
 
 	@Test
-	public void aTreeHiddenByTheMenuWrapperIsRemovedFromTheNextSnapshot()
+	public void unexplainedHiddenTreeDoesNotReplaceTheCachedNetwork()
 	{
 		Widget[] rows = rows(new String[]{"Tree Gnome Village", "Gnome Stronghold",
 			"Battlefield of Khazard", "Grand Exchange", "Port Sarim"}, "735a28");
 		fixture.widgets.put(InterfaceID.Menu.LJ_LAYER1, MenuReaderFixture.container(rows));
 		assertTrue(SpiritTreeReader.readOpenMenu(fixture.client).get().contains("tree-port-sarim"));
 		rows[4] = MenuReaderFixture.widget("<col=735a28>5</col>: Port Sarim", 0, true, new Widget[0]);
-		assertFalse(SpiritTreeReader.readOpenMenu(fixture.client).get().contains("tree-port-sarim"));
+		assertFalse(SpiritTreeReader.readOpenMenu(fixture.client).isPresent());
 	}
 
 	@Test

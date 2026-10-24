@@ -305,7 +305,7 @@ public final class TeleportCatalog
 		alias(nexusNames, "nexus-kharyrll", "Canifis");
 		alias(nexusNames, "nexus-senntisten", "Exam Centre", "Digsite");
 		alias(nexusNames, "nexus-annakarl", "Demonic Ruins");
-		alias(nexusNames, "nexus-ghorrock", "Frozen Waste Plateau");
+		alias(nexusNames, "nexus-ghorrock", "Frozen Waste Plateau", "Frozen Waste");
 		alias(nexusNames, "nexus-carrallanger", "Graveyard of Shadows");
 		alias(nexusNames, "nexus-paddewwa", "Edgeville Dungeon");
 		alias(nexusNames, "nexus-lassar", "Ice Mountain");

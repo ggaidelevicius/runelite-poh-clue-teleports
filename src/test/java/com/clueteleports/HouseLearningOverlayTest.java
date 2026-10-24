@@ -13,8 +13,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.runelite.api.Client;
+import net.runelite.api.ScriptEvent;
+import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -29,6 +34,7 @@ public class HouseLearningOverlayTest
 	{
 		switch (method)
 		{
+			case "isClientThread": return true;
 			case "getWidget":
 				widgetReads.incrementAndGet();
 				return widgets.get(args[0]);
@@ -95,6 +101,53 @@ public class HouseLearningOverlayTest
 	}
 
 	@Test
+	public void nativeJewelleryLabelOverridesAnArbitraryDisplayNameAndCosmeticGray()
+	{
+		put(InterfaceID.PohJewelleryBox.UNIVERSE, new Rectangle(100, 100, 400, 220));
+		Widget custom = nativeJewelleryRow("<col=00ff00>My favourite place</col>",
+			"<col=ccccff>B:</col> Castle Wars", false);
+		putRows(InterfaceID.PohJewelleryBox.DUELING, new Rectangle(100, 100, 180, 100), custom);
+
+		List<HouseLearningOverlay.Mark> marks = overlay.marks(selected(TeleportSource.JEWELLERY_BOX,
+			"jewellery-castle-wars"));
+
+		assertEquals(1, marks.size());
+		assertEquals(custom.getBounds(), marks.get(0).shape.getBounds());
+	}
+
+	@Test
+	public void originalJewelleryLocksAndActualVisibilitySurviveCosmeticRewrites()
+	{
+		put(InterfaceID.PohJewelleryBox.UNIVERSE, new Rectangle(100, 100, 400, 220));
+		for (String original : new String[]{"B: <str>Castle Wars</str>", "B: <col=808080>Castle Wars</col>"})
+		{
+			putRows(InterfaceID.PohJewelleryBox.DUELING, new Rectangle(100, 100, 180, 100),
+				nativeJewelleryRow("Castle Wars", original, false));
+			assertTrue(overlay.marks(selected(TeleportSource.JEWELLERY_BOX, "jewellery-castle-wars")).isEmpty());
+		}
+		putRows(InterfaceID.PohJewelleryBox.DUELING, new Rectangle(100, 100, 180, 100),
+			nativeJewelleryRow("Castle Wars", "B: Castle Wars", true));
+		assertTrue(overlay.marks(selected(TeleportSource.JEWELLERY_BOX, "jewellery-castle-wars")).isEmpty());
+	}
+
+	@Test
+	public void malformedJewelleryListenersDoNotFallBackToAnApparentlyMatchingDisplayName()
+	{
+		put(InterfaceID.PohJewelleryBox.UNIVERSE, new Rectangle(100, 100, 400, 220));
+		Object[][] invalid = {
+			{1690, ScriptEvent.MENU_OP, 0, InterfaceID.PohJewelleryBox.DUELING, 2, "B: Castle Wars", "B", ""},
+			{999, ScriptEvent.MENU_OP, 1, InterfaceID.PohJewelleryBox.DUELING, 2, "B: Castle Wars", "B", ""},
+			{1690, ScriptEvent.MENU_OP, 1, InterfaceID.PohJewelleryBox.GAMING, 2, "B: Castle Wars", "B", ""}};
+		for (Object[] listener : invalid)
+		{
+			putRows(InterfaceID.PohJewelleryBox.DUELING, new Rectangle(100, 100, 180, 100),
+				widget(InterfaceID.PohJewelleryBox.DUELING, 2, "Castle Wars", new Rectangle(110, 155, 160, 20),
+					false, 0xffffff, new Widget[0], listener));
+			assertTrue(overlay.marks(selected(TeleportSource.JEWELLERY_BOX, "jewellery-castle-wars")).isEmpty());
+		}
+	}
+
+	@Test
 	public void recommendationDoesNotHideAnotherSourcesLearningBorder()
 	{
 		put(InterfaceID.PohJewelleryBox.UNIVERSE, new Rectangle(100, 100, 400, 220));
@@ -150,6 +203,60 @@ public class HouseLearningOverlayTest
 			assertEquals(2, marks.size());
 			assertEquals("Learning destinations", marks.get(0).label);
 			assertEquals(new Rectangle(110, 155, 270, 20), marks.get(1).shape.getBounds());
+		}
+	}
+
+	@Test
+	public void retainedHiddenFirstSpiritTreeIdentifiesTheMenuWithoutBeingHighlighted()
+	{
+		for (int component : new int[]{InterfaceID.MenuNew.TEXT, InterfaceID.Menu.LJ_LAYER1})
+		{
+			widgets.clear();
+			putRows(component, new Rectangle(100, 100, 300, 150),
+				widget(0, "1: <str>Tree Gnome Village</str>", new Rectangle(110, 130, 270, 20),
+					true, 0xffffff, new Widget[0]),
+				row("2: Gnome Stronghold", new Rectangle(110, 155, 270, 20)));
+
+			List<HouseLearningOverlay.Mark> marks = overlay.marks(new HouseLearningOverlay.Guidance(true,
+				Set.of(TeleportSource.SPIRIT_TREE), TeleportSource.SPIRIT_TREE, "tree-gnome-stronghold"));
+
+			assertEquals(2, marks.size());
+			assertEquals("Learning destinations", marks.get(0).label);
+			assertEquals(new Rectangle(110, 155, 270, 20), marks.get(1).shape.getBounds());
+			assertTrue(overlay.marks(selected(TeleportSource.SPIRIT_TREE, "tree-tree-gnome-village")).isEmpty());
+		}
+	}
+
+	@Test
+	public void capturedGenericLabelsIdentifyRewrittenSpiritTreesAndIgnoreCosmeticColors()
+	{
+		for (int component : new int[]{InterfaceID.MenuNew.TEXT, InterfaceID.Menu.LJ_LAYER1})
+		{
+			widgets.clear();
+			NativeTeleportMenus menus = captureSpiritMenu(component, "Battlefield of Khazard", false);
+			HouseLearningOverlay captured = new HouseLearningOverlay(client, () -> null, menus);
+
+			List<HouseLearningOverlay.Mark> marks = captured.marks(selected(TeleportSource.SPIRIT_TREE,
+				"tree-battlefield-of-khazard"));
+
+			assertEquals(1, marks.size());
+			assertEquals(new Rectangle(110, 180, 270, 20), marks.get(0).shape.getBounds());
+			assertTrue(captured.marks(selected(TeleportSource.PORTAL_NEXUS, "nexus-grand-exchange")).isEmpty());
+		}
+	}
+
+	@Test
+	public void capturedGenericLocksAndHiddenRowsAreNeverHighlighted()
+	{
+		for (int component : new int[]{InterfaceID.MenuNew.TEXT, InterfaceID.Menu.LJ_LAYER1})
+		{
+			widgets.clear();
+			NativeTeleportMenus menus = captureSpiritMenu(component, "<str>Battlefield of Khazard</str>", false);
+			HouseLearningOverlay captured = new HouseLearningOverlay(client, () -> null, menus);
+			assertTrue(captured.marks(selected(TeleportSource.SPIRIT_TREE, "tree-battlefield-of-khazard")).isEmpty());
+			menus = captureSpiritMenu(component, "Battlefield of Khazard", true);
+			captured = new HouseLearningOverlay(client, () -> null, menus);
+			assertTrue(captured.marks(selected(TeleportSource.SPIRIT_TREE, "tree-battlefield-of-khazard")).isEmpty());
 		}
 	}
 
@@ -339,6 +446,134 @@ public class HouseLearningOverlayTest
 	}
 
 	@Test
+	public void teleportMapsHighlightsTheExistingTreeXericAndObeliskButtonsInBothInterfaces()
+	{
+		TeleportSource[] sources = {TeleportSource.SPIRIT_TREE, TeleportSource.MOUNTED_XERICS_TALISMAN,
+			TeleportSource.WILDERNESS_OBELISK};
+		String[] ids = {"tree-gnome-stronghold", "xeric-glade", "obelisk-35"};
+		String[] names = {"Gnome Stronghold", "Xeric's Glade", "Level 35 Wilderness"};
+		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
+		{
+			for (int index = 0; index < sources.length; index++)
+			{
+				widgets.clear();
+				HouseLearningOverlay mapped = mappedOverlay(component, sources[index], names[index]);
+				List<HouseLearningOverlay.Mark> marks = mapped.marks(selected(sources[index], ids[index]));
+				assertEquals(1, marks.size());
+				assertEquals(new Rectangle(260, 180, 30, 35), marks.get(0).shape.getBounds());
+				assertEquals(HouseLearningOverlay.RECOMMENDED, marks.get(0).color);
+			}
+		}
+	}
+
+	@Test
+	public void teleportMapsLearningBorderUsesTheVisibleMapInsteadOfTheHiddenList()
+	{
+		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
+		{
+			widgets.clear();
+			HouseLearningOverlay mapped = mappedOverlay(component, TeleportSource.SPIRIT_TREE, "Gnome Stronghold");
+			List<HouseLearningOverlay.Mark> marks = mapped.marks(pending(TeleportSource.SPIRIT_TREE));
+			assertEquals(1, marks.size());
+			assertEquals(new Rectangle(100, 100, 512, 334), marks.get(0).shape.getBounds());
+			assertEquals(HouseLearningOverlay.LEARNING, marks.get(0).color);
+		}
+	}
+
+	@Test
+	public void teleportMapsRetainedNativeIdentityHandlesCustomXericNamesContainingAColon()
+	{
+		HouseLearningOverlay mapped = mappedOverlay(InterfaceID.Menu.LJ_LAYER1,
+			TeleportSource.MOUNTED_XERICS_TALISMAN, "Raid: west");
+		assertEquals("Raid: west", HouseLearningOverlay.stripKey("<col=735a28>2</col>: Raid: west"));
+		List<HouseLearningOverlay.Mark> marks = mapped.marks(selected(
+			TeleportSource.MOUNTED_XERICS_TALISMAN, "xeric-glade"));
+		assertEquals(1, marks.size());
+		assertEquals(new Rectangle(260, 180, 30, 35), marks.get(0).shape.getBounds());
+		assertTrue(mapped.marks(selected(TeleportSource.PORTAL_NEXUS, "nexus-kourend-castle")).isEmpty());
+		assertTrue(mapped.marks(new HouseLearningOverlay.Guidance(false, Collections.emptySet(),
+			TeleportSource.MOUNTED_XERICS_TALISMAN, "xeric-glade")).isEmpty());
+	}
+
+	private HouseLearningOverlay mappedOverlay(int component, TeleportSource source, String buttonName)
+	{
+		String[] originals;
+		int sprite;
+		int renamedIndex;
+		if (source == TeleportSource.SPIRIT_TREE)
+		{
+			originals = new String[]{"Tree Gnome Village", "Gnome Stronghold", "Battlefield of Khazard", "Grand Exchange"};
+			sprite = -19000;
+			renamedIndex = 1;
+		}
+		else if (source == TeleportSource.MOUNTED_XERICS_TALISMAN)
+		{
+			originals = new String[]{"Xeric's Lookout", "Xeric's Glade", "Xeric's Inferno", "Xeric's Heart", "Xeric's Honour"};
+			sprite = -19400;
+			renamedIndex = 1;
+		}
+		else
+		{
+			originals = new String[]{"Level 13 Wilderness", "Level 19 Wilderness", "Level 27 Wilderness",
+				"Level 35 Wilderness", "Level 44 Wilderness", "Level 50 Wilderness"};
+			sprite = -19600;
+			renamedIndex = 3;
+		}
+		Widget[] nativeRows = new Widget[originals.length];
+		for (int index = 0; index < nativeRows.length; index++)
+		{
+			String current = index == renamedIndex ? buttonName : originals[index];
+			nativeRows[index] = widget(component, index, "<col=735a28>" + (index + 1) + "</col>: " + current,
+				new Rectangle(100, 100 + index * 20, 300, 20), true, 0xffffff, new Widget[0], null);
+		}
+		widgets.put(component, widget(component, "", new Rectangle(100, 100, 300, 200), true, 0, nativeRows));
+		NativeTeleportMenus menus = new NativeTeleportMenus();
+		int script = component == InterfaceID.Menu.LJ_LAYER1 ? 217 : 9142;
+		Object[] arguments = script == 217
+			? new Object[]{script, "Travel", String.join("|", originals), 1}
+			: new Object[]{script, "Travel", String.join("|", originals), 1, 0, 0, 0};
+		ScriptPreFired pre = new ScriptPreFired(script);
+		pre.setScriptEvent(proxy(ScriptEvent.class, (method, args) ->
+		{
+			if ("getArguments".equals(method)) return arguments;
+			throw new UnsupportedOperationException(method);
+		}));
+		menus.onScriptPreFired(pre);
+		menus.onScriptPostFired(client, new ScriptPostFired(script));
+		int root = component == InterfaceID.Menu.LJ_LAYER1 ? InterfaceID.Menu.LJ_LAYER2 : InterfaceID.MenuNew.INFINITE;
+		Rectangle map = new Rectangle(100, 100, 512, 334);
+		Widget background = mapGraphic(root, 0, sprite, "", map, null);
+		Widget button = mapGraphic(root, 1, -1, buttonName, new Rectangle(260, 180, 30, 35),
+			source == TeleportSource.WILDERNESS_OBELISK ? "Set" : "Travel");
+		putRows(root, map, background, button);
+		return new HouseLearningOverlay(client, () -> null, menus);
+	}
+
+	private static Widget mapGraphic(int root, int index, int sprite, String name, Rectangle bounds, String action)
+	{
+		JavaScriptCallback callback = event -> { throw new AssertionError("Guidance must never execute a map action"); };
+		return proxy(Widget.class, (method, args) ->
+		{
+			switch (method)
+			{
+				case "getId":
+				case "getParentId": return root;
+				case "getIndex": return index;
+				case "getType": return WidgetType.GRAPHIC;
+				case "getSpriteId": return sprite;
+				case "getName": return "<col=ff9040>" + name + "</col>";
+				case "getText": return "";
+				case "getBounds": return bounds;
+				case "isHidden": return false;
+				case "getActions": return action == null ? null : new String[]{action};
+				case "getOnOpListener": return action == null ? null : new Object[]{callback};
+				case "getDynamicChildren": return new Widget[0];
+				default: throw new UnsupportedOperationException(method);
+			}
+		});
+	}
+
+	@Test
 	public void closedMenusDoNotReadTheSceneOrHighlightPendingFixtures()
 	{
 		for (TeleportSource source : TeleportSource.menuSources())
@@ -402,6 +637,39 @@ public class HouseLearningOverlayTest
 		return new HouseLearningOverlay.Guidance(true, Collections.emptySet(), source, id);
 	}
 
+	private static Widget nativeJewelleryRow(String displayed, String original, boolean hidden)
+	{
+		int section = InterfaceID.PohJewelleryBox.DUELING;
+		return widget(section, 2, displayed, new Rectangle(110, 155, 160, 20), hidden, 0x7f7f7f,
+			new Widget[0], new Object[]{1690, ScriptEvent.MENU_OP, 1, section, 2, original, "B", ""});
+	}
+
+	private NativeTeleportMenus captureSpiritMenu(int component, String battlefield, boolean hidden)
+	{
+		Widget[] rows = {
+			widget(component, 0, "Village", new Rectangle(110, 130, 270, 20), false, 0xffffff, new Widget[0], null),
+			widget(component, 1, "Stronghold", new Rectangle(110, 155, 270, 20), false, 0xffffff, new Widget[0], null),
+			widget(component, 2, "<col=ff0000>B'field shortcut</col>", new Rectangle(110, 180, 270, 20),
+				hidden, 0x7f7f7f, new Widget[0], null),
+			widget(component, 3, "GE", new Rectangle(110, 205, 270, 20), false, 0xffffff, new Widget[0], null)};
+		putRows(component, new Rectangle(100, 100, 300, 200), rows);
+		String options = "Tree Gnome Village|Gnome Stronghold|" + battlefield + "|Grand Exchange";
+		int script = component == InterfaceID.MenuNew.TEXT ? 9142 : 217;
+		Object[] arguments = script == 217 ? new Object[]{217, "Spirit Tree Locations", options, 0}
+			: new Object[]{9142, "Spirit Tree Locations", options, 0, 0, 0, 0};
+		ScriptPreFired pre = new ScriptPreFired(script);
+		pre.setScriptEvent(proxy(ScriptEvent.class, (method, args) ->
+		{
+			if ("getArguments".equals(method)) return arguments;
+			throw new UnsupportedOperationException(method);
+		}));
+		NativeTeleportMenus menus = new NativeTeleportMenus();
+		menus.onScriptPreFired(pre);
+		menus.onScriptPostFired(client, new ScriptPostFired(script));
+		assertTrue(menus.isCaptured(rows[2]));
+		return menus;
+	}
+
 	private void fairyControls()
 	{
 		put(InterfaceID.Fairyrings.CONFIRM, new Rectangle(110, 250, 200, 25));
@@ -431,16 +699,25 @@ public class HouseLearningOverlayTest
 
 	private static Widget widget(int id, String text, Rectangle bounds, boolean hidden, int color, Widget[] children)
 	{
+		return widget(id, -1, text, bounds, hidden, color, children, null);
+	}
+
+	private static Widget widget(int id, int index, String text, Rectangle bounds, boolean hidden, int color,
+		Widget[] children, Object[] listener)
+	{
 		return proxy(Widget.class, (method, args) ->
 		{
 			switch (method)
 			{
-				case "getId": return id;
+				case "getId":
+				case "getParentId": return id;
+				case "getIndex": return index;
 				case "getText": return text;
 				case "getBounds": return bounds;
 				case "getTextColor": return color;
 				case "isHidden": return hidden;
 				case "getDynamicChildren": return children;
+				case "getOnOpListener": return listener;
 				case "getActions": return new String[]{"Use code"};
 				default: throw new UnsupportedOperationException(method);
 			}

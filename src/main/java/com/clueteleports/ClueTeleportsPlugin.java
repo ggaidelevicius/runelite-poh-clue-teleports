@@ -14,6 +14,9 @@ import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.ScriptPreFired;
+import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.callback.ClientThread;
@@ -51,6 +54,7 @@ public class ClueTeleportsPlugin extends Plugin
 	private TeleportRouting routing;
 	private final HouseContext houseContext = new HouseContext();
 	private final MenuObservations observations = new MenuObservations();
+	private final NativeTeleportMenus nativeMenus = new NativeTeleportMenus();
 	private final Map<TeleportSource, String> pendingFixtures = new EnumMap<>(TeleportSource.class);
 	private AvailabilityCache availability = new AvailabilityCache();
 	private HouseInventory houseInventory = new HouseInventory();
@@ -72,10 +76,11 @@ public class ClueTeleportsPlugin extends Plugin
 		log.info("POH Clue Teleports started with house entry detection");
 		houseContext.reset();
 		observations.clear();
+		nativeMenus.clear();
 		pendingFixtures.clear();
 		pendingInventory = null;
 		overlayManager.add(overlay);
-		learningOverlay = new HouseLearningOverlay(client, this::getGuidance);
+		learningOverlay = new HouseLearningOverlay(client, this::getGuidance, nativeMenus);
 		overlayManager.add(learningOverlay);
 		clientThread.invokeLater(() -> refresh(false));
 	}
@@ -94,6 +99,7 @@ public class ClueTeleportsPlugin extends Plugin
 		availability = new AvailabilityCache();
 		houseContext.reset();
 		observations.clear();
+		nativeMenus.clear();
 		pendingFixtures.clear();
 		pendingInventory = null;
 		overlayManager.remove(overlay);
@@ -120,6 +126,7 @@ public class ClueTeleportsPlugin extends Plugin
 	public void onWidgetLoaded(WidgetLoaded event)
 	{
 		int group = event.getGroupId();
+		if (running) nativeMenus.onWidgetLoaded(group);
 		if (running && (group == InterfaceID.FAIRYRINGS || group == InterfaceID.FAIRYRINGS_LOG))
 		{
 			fairyTravelLog.reset();
@@ -136,6 +143,32 @@ public class ClueTeleportsPlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onScriptPreFired(ScriptPreFired event)
+	{
+		if (running && NativeTeleportMenus.isMenuScript(event.getScriptId()))
+		{
+			if (houseContext.isOwnHouse(client)) nativeMenus.onScriptPreFired(event);
+			else nativeMenus.clear();
+		}
+	}
+
+	@Subscribe
+	public void onScriptPostFired(ScriptPostFired event)
+	{
+		if (running && NativeTeleportMenus.isMenuScript(event.getScriptId()))
+		{
+			if (houseContext.isOwnHouse(client)) nativeMenus.onScriptPostFired(client, event);
+			else nativeMenus.clear();
+		}
+	}
+
+	@Subscribe
+	public void onWidgetClosed(WidgetClosed event)
+	{
+		nativeMenus.onWidgetClosed(event.getGroupId());
+	}
+
+	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		houseContext.onGameStateChanged(event.getGameState());
@@ -146,6 +179,7 @@ public class ClueTeleportsPlugin extends Plugin
 			clearGuidance();
 			display = null;
 			observations.clear();
+			nativeMenus.clear();
 			pendingFixtures.clear();
 			pendingInventory = null;
 		}
@@ -187,6 +221,7 @@ public class ClueTeleportsPlugin extends Plugin
 			ownHouse = false;
 			clearGuidance();
 			observations.clear();
+			nativeMenus.clear();
 			pendingFixtures.clear();
 			pendingInventory = null;
 		}
@@ -317,12 +352,13 @@ public class ClueTeleportsPlugin extends Plugin
 		{
 			learningHint = "Enter via Home or Teleport to House";
 			observations.clear();
+			nativeMenus.clear();
 			pendingFixtures.clear();
 			pendingInventory = null;
 			return;
 		}
 		learningHint = "Open the travel menus marked Not learned";
-		HouseTransportReader.Observation fixtureReading = HouseTransportReader.readSnapshot(client);
+		HouseTransportReader.Observation fixtureReading = HouseTransportReader.readSnapshot(client, nativeMenus);
 		recordHouseInventory(fixtureReading);
 		recordFixtures(TeleportSource.PORTAL_CHAMBER, fixtureReading.coveredTiles, fixtureReading.portalFixtures);
 		recordFixtures(TeleportSource.CAPE_HANGER, fixtureReading.coveredTiles, fixtureReading.capeFixtures);
@@ -351,7 +387,7 @@ public class ClueTeleportsPlugin extends Plugin
 					reading = FairyRingReader.readOpenMenu(client);
 					break;
 				case SPIRIT_TREE:
-					reading = SpiritTreeReader.readOpenMenu(client);
+					reading = SpiritTreeReader.readOpenMenu(client, nativeMenus);
 					break;
 				case PORTAL_NEXUS:
 					reading = NexusImporter.readOpenMenu(client);
@@ -480,6 +516,7 @@ public class ClueTeleportsPlugin extends Plugin
 			configManager.unsetRSProfileConfiguration(CONFIG_GROUP, HOUSE_INVENTORY_KEY);
 			houseInventory = new HouseInventory();
 			observations.clear();
+			nativeMenus.clear();
 			pendingFixtures.clear();
 			pendingInventory = null;
 			refresh(false);
