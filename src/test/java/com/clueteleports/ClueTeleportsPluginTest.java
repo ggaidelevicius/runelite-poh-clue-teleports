@@ -68,6 +68,7 @@ public class ClueTeleportsPluginTest
 	private int tickCount;
 	private Tile[][][] sceneTiles;
 	private final Map<Integer, ObjectComposition> objectDefinitions = new HashMap<>();
+	private final Map<Integer, Widget> extraWidgets = new HashMap<>();
 	private final Scene scene = proxy(Scene.class, (proxy, method, args) ->
 	{
 		if ("getTiles".equals(method.getName()))
@@ -143,7 +144,9 @@ public class ClueTeleportsPluginTest
 			case "getBaseY":
 				return baseY;
 			case "getWidget":
-				return (Integer) args[0] == InterfaceID.TelenexusTeleport.UNIVERSE && nexusOpen ? menu : null;
+				Widget extraWidget = extraWidgets.get((Integer) args[0]);
+				return extraWidget != null ? extraWidget
+					: (Integer) args[0] == InterfaceID.TelenexusTeleport.UNIVERSE && nexusOpen ? menu : null;
 			case "getEnum":
 				assertEquals(1377, args[0]);
 				nexusReads++;
@@ -595,6 +598,53 @@ public class ClueTeleportsPluginTest
 	}
 
 	@Test
+	public void freshHouseLearnsTheReportedRegionalXericMenuAfterTwoStableReadings() throws Exception
+	{
+		config.unsetRSProfileConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, ClueTeleportsPlugin.HOUSE_INVENTORY_KEY);
+		for (TeleportSource source : TeleportSource.values())
+		{
+			config.unsetRSProfileConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, source.getCacheKey());
+		}
+		TeleportDestination glade = TeleportCatalog.byId("xeric-glade").get();
+		setClue(new FixedLocationClue(glade.getLocation()));
+		placeFixture(ObjectID.POH_AMULET_XERIC, "Xeric's talisman");
+		enterOwnHouse();
+		tick();
+		assertEquals(Set.of(TeleportSource.MOUNTED_XERICS_TALISMAN), plugin.getDisplay().getRequiredSources());
+		assertTrue(plugin.getDisplay().isLearning());
+		extraWidgets.put(InterfaceID.Menu.LJ_LAYER1, regionalXericMenu());
+
+		tick();
+		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
+		assertTrue(plugin.getDisplay().isLearning());
+		tick();
+
+		assertEquals(Set.of("xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart", "xeric-honour"),
+			AvailableTeleports.decode(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN)));
+		assertFalse(plugin.getDisplay().isLearning());
+		assertEquals("Mounted Xeric's talisman", plugin.getDisplay().first);
+		assertEquals(glade.getName(), plugin.getDisplay().second);
+		assertEquals(glade.getId(), plugin.getGuidance().getDestinationId());
+	}
+
+	@Test
+	public void regionalXericMenuInAGuestHouseCannotTeachTheSource()
+	{
+		placeFixture(ObjectID.POH_AMULET_XERIC, "Xeric's talisman");
+		extraWidgets.put(InterfaceID.Menu.LJ_LAYER1, regionalXericMenu());
+		clickEntry("Friend's house", "<col=00ffff>Portal</col>", MenuAction.GAME_OBJECT_THIRD_OPTION, 0);
+		changeGameState(GameState.LOADING);
+		changeGameState(GameState.LOGGED_IN);
+
+		tick();
+		tick();
+		tick();
+
+		assertNull(cachedSource(TeleportSource.MOUNTED_XERICS_TALISMAN));
+		assertFalse(plugin.getGuidance().isOwnHouse());
+	}
+
+	@Test
 	public void deterministicObeliskIsLearnedAndCanWinTheComparison() throws Exception
 	{
 		TeleportDestination obelisk = TeleportCatalog.byId("obelisk-50").get();
@@ -997,6 +1047,14 @@ public class ClueTeleportsPluginTest
 				throw new AssertionError("Unexpected struct call: " + method.getName());
 			}));
 		}
+	}
+
+	private Widget regionalXericMenu()
+	{
+		return MenuReaderFixture.container(
+			MenuReaderFixture.text("1: Shayzien"), MenuReaderFixture.text("2: Hosidius"),
+			MenuReaderFixture.text("3: Lovakengj"), MenuReaderFixture.text("4: Kourend Castle"),
+			MenuReaderFixture.text("5: Chambers of Xeric"), MenuReaderFixture.text("6: Nowhere"));
 	}
 
 	private void clearNexusCache()

@@ -25,7 +25,7 @@ The checklist includes only detected facilities that need menu reading. For exam
 | Mounted digsite pendant | Open its teleport menu. | The Digsite and the account's unlocked Fossil Island and Lithkren destinations. |
 | Mounted glory | Observe the loaded fixture; no menu opening needed. | Edgeville, Karamja, Draynor Village, and Al Kharid. |
 | Mounted mythical cape | Observe the loaded fixture; no menu opening needed. | Myths' Guild. |
-| Mounted Xeric's talisman | Open its teleport menu. | The account's unlocked talisman destinations. |
+| Mounted Xeric's talisman | Open its teleport menu. | The account's unlocked talisman destinations, whether the menu shows talisman names or place names. |
 | Portal chambers | Observe the loaded fixtures; no menu opening needed. | The installed fixed portal destinations, including supported diary alternatives. |
 | Portal nexus | Open its teleport menu. | Installed destination slots, live destination names, and supported diary alternatives. |
 | Spirit tree | Open its travel menu. | Planted and quest destinations enabled in the old or new travel menu. |
@@ -81,7 +81,7 @@ Start the development client yourself when ready:
 
 Source compiles to Java 11 bytecode, following the RuneLite plugin template. The macOS development task includes the native fullscreen adapter's required Java exports. The optional `gradle-local` helper uses a project-local JDK and Gradle cache when configured; `./gradle-local build --offline` works after dependencies have been cached.
 
-Enable **POH Clue Teleports** in the development client, enter your own house, and open only the detected travel menus to learn their available destinations. Read a clue with **Clue Scroll** enabled. The ordinary JAR at `build/libs/poh-clue-teleports-1.0.0.jar` is a development build artifact. Source is available at [ggaidelevicius/runelite-poh-clue-teleports](https://github.com/ggaidelevicius/runelite-poh-clue-teleports). Updates use versioned source commits submitted to Plugin Hub, where RuneLite reviews and merges the commit pin.
+Enable **POH Clue Teleports** in the development client, enter your own house, and open only the detected travel menus to learn their available destinations. Read a clue with **Clue Scroll** enabled. The ordinary JAR at `build/libs/poh-clue-teleports-1.0.1.jar` is a development build artifact. Source is available at [ggaidelevicius/runelite-poh-clue-teleports](https://github.com/ggaidelevicius/runelite-poh-clue-teleports). Updates use versioned source commits submitted to Plugin Hub, where RuneLite reviews and merges the commit pin.
 
 ## Manual verification
 

@@ -175,6 +175,77 @@ public class HouseLearningOverlayTest
 	}
 
 	@Test
+	public void regionalXericMenusHighlightEachCanonicalDestination()
+	{
+		String[] labels = {"Shayzien", "Hosidius", "Lovakengj", "Kourend Castle", "Chambers of Xeric"};
+		String[] ids = {"xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart", "xeric-honour"};
+		for (int component : new int[]{InterfaceID.MenuNew.TEXT, InterfaceID.Menu.LJ_LAYER1})
+		{
+			widgets.clear();
+			Widget[] rows = new Widget[6];
+			for (int index = 0; index < labels.length; index++)
+			{
+				rows[index] = row("<col=735a28>" + (index + 1) + "</col>: " + labels[index],
+					new Rectangle(110, 130 + index * 25, 270, 20));
+			}
+			rows[5] = row("6: Nowhere", new Rectangle(110, 255, 270, 20));
+			putRows(component, new Rectangle(100, 100, 300, 200), rows);
+			for (int index = 0; index < ids.length; index++)
+			{
+				List<HouseLearningOverlay.Mark> marks = overlay.marks(selected(
+					TeleportSource.MOUNTED_XERICS_TALISMAN, ids[index]));
+				assertEquals(1, marks.size());
+				assertEquals(new Rectangle(110, 130 + index * 25, 270, 20), marks.get(0).shape.getBounds());
+				assertEquals(HouseLearningOverlay.RECOMMENDED, marks.get(0).color);
+			}
+		}
+	}
+
+	@Test
+	public void regionalXericMenusReceiveTheLearningBorder()
+	{
+		for (int component : new int[]{InterfaceID.MenuNew.TEXT, InterfaceID.Menu.LJ_LAYER1})
+		{
+			widgets.clear();
+			putRows(component, new Rectangle(100, 100, 300, 200),
+				row("1: Shayzien", new Rectangle(110, 130, 270, 20)),
+				row("2: Hosidius", new Rectangle(110, 155, 270, 20)));
+
+			List<HouseLearningOverlay.Mark> marks = overlay.marks(pending(TeleportSource.MOUNTED_XERICS_TALISMAN));
+
+			assertEquals(1, marks.size());
+			assertEquals(HouseLearningOverlay.LEARNING, marks.get(0).color);
+			assertEquals("Learning destinations", marks.get(0).label);
+		}
+	}
+
+	@Test
+	public void disabledRegionalXericChoicesAreNotHighlighted()
+	{
+		putRows(InterfaceID.Menu.LJ_LAYER1, new Rectangle(100, 100, 300, 200),
+			row("1: Shayzien", new Rectangle(110, 130, 270, 20)),
+			row("2: <str>Hosidius</str>", new Rectangle(110, 155, 270, 20)),
+			widget(0, "3: Lovakengj", new Rectangle(110, 180, 270, 20), false, 0x7f7f7f, new Widget[0]),
+			widget(0, "4: Kourend Castle", new Rectangle(110, 205, 270, 20), true, 0xffffff, new Widget[0]));
+
+		for (String id : new String[]{"xeric-glade", "xeric-inferno", "xeric-heart"})
+		{
+			assertTrue(overlay.marks(selected(TeleportSource.MOUNTED_XERICS_TALISMAN, id)).isEmpty());
+		}
+	}
+
+	@Test
+	public void xericRegionalNamesDoNotRedirectANexusRecommendation()
+	{
+		putRows(InterfaceID.Menu.LJ_LAYER1, new Rectangle(100, 100, 300, 200),
+			row("1: Shayzien", new Rectangle(110, 130, 270, 20)),
+			row("4: Kourend Castle", new Rectangle(110, 205, 270, 20)));
+
+		assertTrue(overlay.marks(selected(TeleportSource.PORTAL_NEXUS, "nexus-kourend")).isEmpty());
+		assertEquals(1, overlay.marks(selected(TeleportSource.MOUNTED_XERICS_TALISMAN, "xeric-heart")).size());
+	}
+
+	@Test
 	public void matchingNamesInAnotherSourcesMenuAreNotHighlighted()
 	{
 		putRows(InterfaceID.Menu.LJ_LAYER1, new Rectangle(100, 100, 300, 150),

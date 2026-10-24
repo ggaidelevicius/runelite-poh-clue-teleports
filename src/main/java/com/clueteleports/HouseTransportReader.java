@@ -42,9 +42,17 @@ public final class HouseTransportReader
 		ObjectID.POH_AMULET_XERIC_INFERNO, ObjectID.POH_AMULET_XERIC_HEART, ObjectID.POH_AMULET_XERIC_HONOUR);
 	private static final Map<String, String> DIGSITE_LABELS = Map.of(
 		"digsite", "digsite-digsite", "fossil island", "digsite-fossil-island", "lithkren", "digsite-lithkren");
+	// The in-game menu captured in issue #1 uses these five district/location
+	// names. Its numbered order matches the canonical arrivals in the pinned
+	// Shortest Path teleportation_items.tsv, including their existing coordinates.
+	// https://github.com/ggaidelevicius/runelite-poh-clue-teleports/issues/1
+	// https://github.com/Skretzo/shortest-path/blob/50f30435f37d1d5c5e2af790925fa7aa70b7840d/src/main/resources/transports/teleportation_items.tsv
 	private static final Map<String, String> XERIC_LABELS = Map.of(
-		"xeric's lookout", "xeric-lookout", "xeric's glade", "xeric-glade",
-		"xeric's inferno", "xeric-inferno", "xeric's heart", "xeric-heart", "xeric's honour", "xeric-honour");
+		"xeric's lookout", "xeric-lookout", "shayzien", "xeric-lookout",
+		"xeric's glade", "xeric-glade", "hosidius", "xeric-glade",
+		"xeric's inferno", "xeric-inferno", "lovakengj", "xeric-inferno",
+		"xeric's heart", "xeric-heart", "kourend castle", "xeric-heart",
+		"xeric's honour", "xeric-honour", "chambers of xeric", "xeric-honour");
 
 	private HouseTransportReader()
 	{
@@ -292,6 +300,12 @@ public final class HouseTransportReader
 		}
 	}
 
+	/** Resolves a known row after its caller removes keys/tags and normalizes case. */
+	static String xericDestinationId(String normalizedLabel)
+	{
+		return normalizedLabel == null ? null : XERIC_LABELS.get(normalizedLabel);
+	}
+
 	private static Optional<Set<String>> readMountedMenu(Client client, Map<String, String> labels)
 	{
 		Optional<Set<String>> current = readMountedMenu(client.getWidget(InterfaceID.MenuNew.TEXT), labels);
@@ -304,8 +318,9 @@ public final class HouseTransportReader
 		{
 			return Optional.empty();
 		}
+		Set<String> expected = new LinkedHashSet<>(labels.values());
 		Widget[] rows = container.getDynamicChildren();
-		if (rows == null || rows.length < labels.size())
+		if (rows == null || rows.length < expected.size())
 		{
 			return Optional.empty();
 		}
@@ -345,7 +360,7 @@ public final class HouseTransportReader
 				available.add(id);
 			}
 		}
-		return listed.size() == labels.size()
+		return listed.equals(expected)
 			? Optional.of(Collections.unmodifiableSet(available)) : Optional.empty();
 	}
 

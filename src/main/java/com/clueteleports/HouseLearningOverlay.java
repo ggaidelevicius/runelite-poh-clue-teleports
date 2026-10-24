@@ -124,7 +124,7 @@ public final class HouseLearningOverlay extends Overlay
 			{
 				open.put(TeleportSource.MOUNTED_DIGSITE_PENDANT, genericClip(generic));
 			}
-			else if ("xeric's lookout".equals(first))
+			else if ("xeric-lookout".equals(HouseTransportReader.xericDestinationId(first)))
 			{
 				open.put(TeleportSource.MOUNTED_XERICS_TALISMAN, genericClip(generic));
 			}
@@ -242,6 +242,10 @@ public final class HouseLearningOverlay extends Overlay
 		if (label.equals(normalize(selected.getName())))
 		{
 			return true;
+		}
+		if (selected.getSource() == TeleportSource.MOUNTED_XERICS_TALISMAN)
+		{
+			return selected.getId().equals(HouseTransportReader.xericDestinationId(label));
 		}
 		if (selected.getSource() == TeleportSource.PORTAL_NEXUS)
 		{

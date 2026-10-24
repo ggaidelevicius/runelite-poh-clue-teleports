@@ -354,6 +354,108 @@ public class HouseTransportReaderTest
 	}
 
 	@Test
+	public void districtNamedXericMenuFromTheIssueLearnsAllFiveArrivalsInBothInterfaces()
+	{
+		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_XERIC)}, null, null);
+		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
+		{
+			fixture.widgets.clear();
+			fixture.widgets.put(component, districtXericMenu(MenuReaderFixture.text("5: Chambers of Xeric")));
+
+			assertEquals(Set.of("xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart", "xeric-honour"),
+				read().sources.get(TeleportSource.MOUNTED_XERICS_TALISMAN));
+		}
+	}
+
+	@Test
+	public void districtNamedXericMenuPreservesStruckHiddenAndColouredChambersLocks()
+	{
+		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_XERIC)}, null, null);
+		Widget[] locked = {
+			MenuReaderFixture.text("5: <str>Chambers of Xeric</str>"),
+			MenuReaderFixture.widget("5: Chambers of Xeric", 0xffffff, true, new Widget[0]),
+			MenuReaderFixture.text("5: <col=808080>Chambers of Xeric</col>")};
+		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
+		{
+			for (Widget chambers : locked)
+			{
+				fixture.widgets.clear();
+				fixture.widgets.put(component, districtXericMenu(chambers));
+
+				assertEquals(Set.of("xeric-lookout", "xeric-glade", "xeric-inferno", "xeric-heart"),
+					read().sources.get(TeleportSource.MOUNTED_XERICS_TALISMAN));
+			}
+		}
+	}
+
+	@Test
+	public void districtXericAliasesCannotMakeMissingUnknownOrDuplicateDestinationsComplete()
+	{
+		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_XERIC)}, null, null);
+		Widget[][] malformed = {
+			{MenuReaderFixture.text("1: Shayzien"), MenuReaderFixture.text("2: Hosidius"),
+				MenuReaderFixture.text("3: Lovakengj"), MenuReaderFixture.text("4: Kourend Castle"),
+				MenuReaderFixture.text("6: Nowhere")},
+			{MenuReaderFixture.text("1: Shayzien"), MenuReaderFixture.text("2: Hosidius"),
+				MenuReaderFixture.text("3: Lovakengj"), MenuReaderFixture.text("4: Kourend Castle"),
+				MenuReaderFixture.text("5: Unknown"), MenuReaderFixture.text("6: Nowhere")},
+			{MenuReaderFixture.text("1: Shayzien"), MenuReaderFixture.text("2: Hosidius"),
+				MenuReaderFixture.text("3: Lovakengj"), MenuReaderFixture.text("4: Kourend Castle"),
+				MenuReaderFixture.text("5: Xeric's Lookout"), MenuReaderFixture.text("6: Nowhere")},
+			{MenuReaderFixture.text("1: Shayzien"), MenuReaderFixture.text("2: Hosidius"),
+				MenuReaderFixture.text("3: Lovakengj"), MenuReaderFixture.text("4: Kourend Castle"),
+				MenuReaderFixture.text("5: Chambers of Xeric"), MenuReaderFixture.text("6: Xeric's Lookout"),
+				MenuReaderFixture.text("7: Nowhere")}};
+		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
+		{
+			for (Widget[] rows : malformed)
+			{
+				fixture.widgets.clear();
+				fixture.widgets.put(component, MenuReaderFixture.container(rows));
+
+				assertFalse(read().sources.containsKey(TeleportSource.MOUNTED_XERICS_TALISMAN));
+			}
+		}
+	}
+
+	@Test
+	public void districtXericMenuStillNeedsALoadedMountedFixture()
+	{
+		for (int component : new int[]{InterfaceID.Menu.LJ_LAYER1, InterfaceID.MenuNew.TEXT})
+		{
+			fixture.widgets.clear();
+			fixture.widgets.put(component, districtXericMenu(MenuReaderFixture.text("5: Chambers of Xeric")));
+
+			assertFalse(read().sources.containsKey(TeleportSource.MOUNTED_XERICS_TALISMAN));
+		}
+	}
+
+	@Test
+	public void normalizedXericLabelsExposeOnlyTheKnownCanonicalDestinations()
+	{
+		String[][] names = {{"xeric's lookout", "shayzien", "xeric-lookout"},
+			{"xeric's glade", "hosidius", "xeric-glade"},
+			{"xeric's inferno", "lovakengj", "xeric-inferno"},
+			{"xeric's heart", "kourend castle", "xeric-heart"},
+			{"xeric's honour", "chambers of xeric", "xeric-honour"}};
+		for (String[] name : names)
+		{
+			assertEquals(name[2], HouseTransportReader.xericDestinationId(name[0]));
+			assertEquals(name[2], HouseTransportReader.xericDestinationId(name[1]));
+		}
+		assertEquals(null, HouseTransportReader.xericDestinationId("unknown"));
+		assertEquals(null, HouseTransportReader.xericDestinationId(null));
+	}
+
+	private static Widget districtXericMenu(Widget chambers)
+	{
+		return MenuReaderFixture.container(
+			MenuReaderFixture.text("1: Shayzien"), MenuReaderFixture.text("2: Hosidius"),
+			MenuReaderFixture.text("3: Lovakengj"), MenuReaderFixture.text("4: Kourend Castle"),
+			chambers, MenuReaderFixture.text("6: Nowhere"));
+	}
+
+	@Test
 	public void incompleteAmbiguousAndDuplicateMenusNeverReplaceMountedSnapshot()
 	{
 		fixture.tiles[0][0][0] = tile(new GameObject[]{fixture.game(ObjectID.POH_AMULET_DIG_DIGSITE)}, null, null);
