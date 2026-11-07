@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 import net.runelite.api.coords.WorldPoint;
 import org.junit.Test;
 
@@ -18,7 +17,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class WalkingRouteSearchTest
@@ -77,27 +75,6 @@ public class WalkingRouteSearchTest
 
 		assertFound(result, arrival, 8, 2, 1);
 		assertEquals(4.0, result.getEstimatedRunTicks(), 0);
-	}
-
-	@Test
-	public void winningPathIncludesTheDetourAndMarksAnAdjacentDoorAsAPassage()
-	{
-		WorldPoint start = point(10, 10);
-		WorldPoint turn = point(10, 11);
-		WorldPoint door = point(10, 12);
-		WorldPoint pastDoor = point(11, 12);
-		WorldPoint goal = point(11, 11);
-		collision.path(start, turn, door);
-		collision.link(pastDoor, goal);
-		TeleportDestination arrival = arrival("door", TeleportSource.PORTAL_NEXUS, start);
-
-		WalkingRouteResult result = run(List.of(passage(door, pastDoor, 2)), List.of(goal), List.of(arrival));
-
-		assertFound(result, arrival, 7, 3, 1);
-		assertEquals(List.of(start, turn, door, pastDoor, goal), locations(result));
-		assertEquals(List.of(false, false, true, false, false), result.getSteps().stream()
-			.map(WalkingRouteResult.Step::isPassageToNext).collect(Collectors.toList()));
-		assertThrows(UnsupportedOperationException.class, () -> result.getSteps().clear());
 	}
 
 	@Test
@@ -186,13 +163,8 @@ public class WalkingRouteSearchTest
 		collision.directed(a, b);
 		TeleportDestination start = arrival("decrease", TeleportSource.FAIRY_RING, a);
 
-		WalkingRouteResult result = run(List.of(passage(a, goal, 10), passage(b, goal, 1)),
-			List.of(goal), List.of(start));
-
-		assertFound(result, start, 3, 1, 1);
-		assertEquals(List.of(a, b, goal), locations(result));
-		assertFalse(result.getSteps().get(0).isPassageToNext());
-		assertTrue(result.getSteps().get(1).isPassageToNext());
+		assertFound(run(List.of(passage(a, goal, 10), passage(b, goal, 1)),
+			List.of(goal), List.of(start)), start, 3, 1, 1);
 	}
 
 	@Test
@@ -282,7 +254,6 @@ public class WalkingRouteSearchTest
 		assertFalse(result.isFound());
 		assertNull(result.getDestination());
 		assertEquals(-1, result.getCostHalfTicks());
-		assertTrue(result.getSteps().isEmpty());
 	}
 
 	@Test
@@ -371,12 +342,7 @@ public class WalkingRouteSearchTest
 		for (int x = 0; x < 5999; x++) collision.link(point(x, 0), point(x + 1, 0));
 		TeleportDestination arrival = arrival("long", TeleportSource.FAIRY_RING, point(0, 0));
 
-		WalkingRouteResult result = run(List.of(), List.of(point(5999, 0)), List.of(arrival));
-
-		assertFound(result, arrival, 5999, 5999, 0);
-		assertEquals(6000, result.getSteps().size());
-		assertEquals(point(0, 0), result.getSteps().get(0).getLocation());
-		assertEquals(point(5999, 0), result.getSteps().get(5999).getLocation());
+		assertFound(run(List.of(), List.of(point(5999, 0)), List.of(arrival)), arrival, 5999, 5999, 0);
 	}
 
 	@Test
@@ -408,11 +374,6 @@ public class WalkingRouteSearchTest
 	private static RouteTransport passage(WorldPoint from, WorldPoint to, int ticks)
 	{
 		return new RouteTransport(pack(from), pack(to), ticks, "Traverse", RouteRequirements.none());
-	}
-
-	private static List<WorldPoint> locations(WalkingRouteResult result)
-	{
-		return result.getSteps().stream().map(WalkingRouteResult.Step::getLocation).collect(Collectors.toList());
 	}
 
 	private static TeleportDestination arrival(String id, TeleportSource source, WorldPoint point)

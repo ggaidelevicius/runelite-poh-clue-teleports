@@ -102,7 +102,7 @@ public class ClueTeleportsPlugin extends Plugin
 		overlayManager.add(overlay);
 		learningOverlay = new HouseLearningOverlay(client, this::getGuidance, nativeMenus);
 		overlayManager.add(learningOverlay);
-		minimapOverlay = new ClueMinimapOverlay(client, this::getMinimapWaypoint);
+		minimapOverlay = new ClueMinimapOverlay(client, this::getMinimapTarget);
 		overlayManager.add(minimapOverlay);
 		clientThread.invokeLater(() -> refresh(false));
 	}
@@ -213,8 +213,7 @@ public class ClueTeleportsPlugin extends Plugin
 		}
 		if (event.getGameState() != GameState.LOGGED_IN)
 		{
-			// An ordinary scene load can be the recommended teleport or a
-			// manual route passage. Keep its snapshot while the scene settles.
+			// Keep the clue target through the recommended teleport and ordinary scene loads.
 			if (event.getGameState() == GameState.LOADING) arrivalGuidance.hide();
 			else arrivalGuidance.clear();
 			invalidateRoute();
@@ -349,13 +348,7 @@ public class ClueTeleportsPlugin extends Plugin
 			case RESOLVED:
 				if (selected.isEmpty())
 				{
-					// A limited-use teleport can expire on arrival. Keep checking
-					// passage eligibility for the rest of its walking route.
-					if (routing != null && config.minimapArrow() && arrivalGuidance.hasRoute())
-					{
-						routing.update(client, currentProfile, target.getLocations(), Collections.emptyList(), target.getInteractionRadius());
-					}
-					else invalidateRoute();
+					invalidateRoute();
 					display = new ClueTeleportsOverlay.Display("No available POH teleports", "No usable destinations in learned sources", null);
 					break;
 				}
@@ -379,7 +372,7 @@ public class ClueTeleportsPlugin extends Plugin
 		if (config.minimapArrow() && routing != null)
 		{
 			arrivalGuidance.update(client.getTickCount(), currentProfile, clue, target.getLocations(), ownHouse,
-				recommendation, this::outsidePosition, routing);
+				recommendation, this::outsidePosition);
 		}
 		else arrivalGuidance.clear();
 	}
@@ -392,9 +385,9 @@ public class ClueTeleportsPlugin extends Plugin
 			? player.getWorldLocation() : null;
 	}
 
-	WorldPoint getMinimapWaypoint()
+	WorldPoint getMinimapTarget()
 	{
-		return running && config.minimapArrow() ? arrivalGuidance.getWaypoint() : null;
+		return running && config.minimapArrow() ? arrivalGuidance.getTarget() : null;
 	}
 
 	private void invalidateRoute()

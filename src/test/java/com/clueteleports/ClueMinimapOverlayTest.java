@@ -1,5 +1,6 @@
 package com.clueteleports;
 
+import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
@@ -9,17 +10,15 @@ import java.util.Arrays;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
-import net.runelite.api.Point;
 import net.runelite.api.SpritePixels;
 import net.runelite.api.WorldView;
-import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.SpriteID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import org.junit.Test;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -27,35 +26,66 @@ import static org.junit.Assert.assertTrue;
 public class ClueMinimapOverlayTest
 {
 	@Test
-	public void projectsTheWaypointAndClipsTheArrowToTheNativeMask()
+	public void fitsTheWholeYellowArrowInsideTheNativeRim()
 	{
 		Fixture fixture = new Fixture();
 		BufferedImage complete = fixture.draw();
 		assertEquals(SpriteID.FIXED_MAP_MASK, fixture.lastSpriteId);
-		assertTrue(alpha(complete, 78, 72) > 0);
-		assertTrue(alpha(complete, 82, 72) > 0);
+		Rectangle normalArrow = paintedBounds(complete);
+		assertTrue(normalArrow.x > 100);
+		assertTrue(Arrays.stream(pixels(complete)).anyMatch(pixel -> pixel == Color.YELLOW.getRGB()));
 
 		Fixture clipped = new Fixture();
+		int inset = 6;
 		for (int y = 0; y < Fixture.BOUNDS.height; y++)
 		{
-			Arrays.fill(clipped.mask, y * Fixture.BOUNDS.width, y * Fixture.BOUNDS.width + 60, 1);
+			int end = (y + 1) * Fixture.BOUNDS.width;
+			Arrays.fill(clipped.mask, end - inset, end, 1);
 		}
-		BufferedImage masked = clipped.draw();
-		assertEquals(0, alpha(masked, 78, 72));
-		assertTrue(alpha(masked, 82, 72) > 0);
+		Rectangle insetArrow = paintedBounds(clipped.draw());
+		assertEquals(normalArrow.width, insetArrow.width);
+		assertEquals(normalArrow.height, insetArrow.height);
+		assertTrue(insetArrow.x + insetArrow.width <= Fixture.BOUNDS.x + Fixture.BOUNDS.width - inset);
+		assertTrue(insetArrow.x < normalArrow.x);
 	}
 
 	@Test
-	public void usesBothResizableLayoutsAndPulsesWithoutHidingTheWaypoint()
+	public void keepsTheArrowOnTheSameRimPositionAsTheWaypointGetsCloser()
+	{
+		Fixture fixture = new Fixture();
+		fixture.waypoint = new WorldPoint(3310, 3210, 0);
+		int[] distant = pixels(fixture.draw());
+		assertTrue(Arrays.stream(distant).anyMatch(pixel -> pixel != 0));
+		fixture.waypoint = new WorldPoint(3213, 3210, 0);
+		assertArrayEquals(distant, pixels(fixture.draw()));
+		fixture.playerTile = new WorldPoint(3212, 3210, 0);
+		assertArrayEquals(distant, pixels(fixture.draw()));
+	}
+
+	@Test
+	public void rotatesTheArrowToTheCorrespondingRimWithTheMinimap()
+	{
+		Fixture fixture = new Fixture();
+		Rectangle east = paintedBounds(fixture.draw());
+		assertTrue(east.x > 100 && east.y >= 65 && east.y + east.height <= 80);
+		fixture.yaw = 4096;
+		Rectangle south = paintedBounds(fixture.draw());
+		assertTrue(south.y > 100 && south.x >= 65 && south.x + south.width <= 80);
+	}
+
+	@Test
+	public void blinksAtTheSamePositionInBothResizableLayouts()
 	{
 		Fixture fixture = new Fixture();
 		fixture.resized = true;
-		int bright = alpha(fixture.draw(), 82, 72);
+		int[] visible = pixels(fixture.draw());
+		assertTrue(Arrays.stream(visible).anyMatch(pixel -> pixel != 0));
 		assertEquals(SpriteID.RESIZE_MAP_MASK, fixture.lastSpriteId);
 		fixture.stones = 1;
-		fixture.cycle = 30;
-		int dim = alpha(fixture.draw(), 82, 72);
-		assertTrue(dim > 0 && dim < bright);
+		fixture.cycle = 40;
+		assertBlank(fixture.draw());
+		fixture.cycle = 60;
+		assertArrayEquals(visible, pixels(fixture.draw()));
 	}
 
 	@Test
@@ -76,14 +106,12 @@ public class ClueMinimapOverlayTest
 	}
 
 	@Test
-	public void onlyDrawsNearbyWaypointsOnTheCurrentWorldViewAndPlane()
+	public void requiresAnUnreachedWaypointOnTheCurrentWorldViewAndPlane()
 	{
 		Fixture fixture = new Fixture();
 		fixture.waypoint = null;
 		assertBlank(fixture.draw());
-		fixture.waypoint = new WorldPoint(3310, 3210, 0);
-		assertBlank(fixture.draw());
-		fixture.waypoint = new WorldPoint(3250, 3210, 0);
+		fixture.waypoint = fixture.playerTile;
 		assertBlank(fixture.draw());
 		fixture.waypoint = new WorldPoint(3213, 3210, 1);
 		assertBlank(fixture.draw());
@@ -92,15 +120,35 @@ public class ClueMinimapOverlayTest
 		assertBlank(fixture.draw());
 	}
 
-	private static int alpha(BufferedImage image, int x, int y)
+	private static Rectangle paintedBounds(BufferedImage image)
 	{
-		return image.getRGB(x, y) >>> 24;
+		int minX = image.getWidth();
+		int minY = image.getHeight();
+		int maxX = -1;
+		int maxY = -1;
+		for (int y = 0; y < image.getHeight(); y++)
+		{
+			for (int x = 0; x < image.getWidth(); x++)
+			{
+				if (image.getRGB(x, y) == 0) continue;
+				minX = Math.min(minX, x);
+				minY = Math.min(minY, y);
+				maxX = Math.max(maxX, x);
+				maxY = Math.max(maxY, y);
+			}
+		}
+		assertTrue("Expected an arrow", maxX >= minX);
+		return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+	}
+
+	private static int[] pixels(BufferedImage image)
+	{
+		return image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
 	}
 
 	private static void assertBlank(BufferedImage image)
 	{
-		int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
-		assertTrue(Arrays.stream(pixels).allMatch(pixel -> pixel == 0));
+		assertTrue(Arrays.stream(pixels(image)).allMatch(pixel -> pixel == 0));
 	}
 
 	private static final class Fixture
@@ -108,6 +156,7 @@ public class ClueMinimapOverlayTest
 		private static final Rectangle BOUNDS = new Rectangle(20, 20, 104, 104);
 		private final int[] mask = new int[BOUNDS.width * BOUNDS.height];
 		private WorldPoint waypoint = new WorldPoint(3213, 3210, 0);
+		private WorldPoint playerTile = new WorldPoint(3210, 3210, 0);
 		private boolean instance;
 		private boolean resized;
 		private boolean hidden;
@@ -116,16 +165,13 @@ public class ClueMinimapOverlayTest
 		private int mapState;
 		private int stones;
 		private int cycle;
+		private int yaw;
 		private int lastSpriteId;
 		private final WorldView view = proxy(WorldView.class, (ignored, method, args) ->
 		{
 			switch (method.getName())
 			{
 				case "getId": return WorldView.TOPLEVEL;
-				case "getBaseX":
-				case "getBaseY": return 3200;
-				case "getSizeX":
-				case "getSizeY": return 104;
 				case "getPlane": return 0;
 				case "isInstance": return instance;
 				default: throw new AssertionError(method.getName());
@@ -136,8 +182,7 @@ public class ClueMinimapOverlayTest
 			switch (method.getName())
 			{
 				case "getWorldView": return view;
-				case "getCameraFocus":
-				case "getLocalLocation": return LocalPoint.fromScene(10, 10, view);
+				case "getWorldLocation": return playerTile;
 				default: throw new AssertionError(method.getName());
 			}
 		});
@@ -147,9 +192,6 @@ public class ClueMinimapOverlayTest
 			{
 				case "isHidden": return hidden;
 				case "getBounds": return new Rectangle(BOUNDS);
-				case "getCanvasLocation": return new Point(BOUNDS.x, BOUNDS.y);
-				case "getWidth": return BOUNDS.width;
-				case "getHeight": return BOUNDS.height;
 				default: throw new AssertionError(method.getName());
 			}
 		});
@@ -173,18 +215,15 @@ public class ClueMinimapOverlayTest
 			switch (method.getName())
 			{
 				case "getGameState": return GameState.LOGGED_IN;
-				case "getLocalPlayer":
-				case "getCameraFocusEntity": return player;
+				case "getLocalPlayer": return player;
 				case "isResized": return resized;
-				case "getCameraYawTarget": return 0;
-				case "getMinimapZoom": return 4.0;
+				case "getCameraYawTarget": return yaw;
 				case "getGameCycle": return cycle;
 				case "getIndexSprites": return null;
 				case "getSprites":
 					lastSpriteId = (int) args[1];
 					return new SpritePixels[]{sprite};
-				case "getWidget":
-					return widget(args[0] instanceof WidgetInfo ? ((WidgetInfo) args[0]).getPackedId() : (int) args[0]);
+				case "getWidget": return widget((int) args[0]);
 				case "getVarbitValue": return varbit((int) args[0]);
 				default: throw new AssertionError(method.getName());
 			}

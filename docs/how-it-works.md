@@ -59,7 +59,7 @@ Initial house setup and the learning checklist always use the full panel, regard
 
 **Chat messages** is off by default and works independently of the overlay mode. When enabled, a local message such as `[POH Clue Teleports] Jewellery box: Fishing Guild` announces a clue step's first available recommendation and any change to its recommended facility or destination. New steps can announce the same teleport again. Reopening menus, ordinary loading, world hops, and recalculating the same recommendation do not repeat it. Setup and route-progress messages are not announced. Enabling chat during a clue announces the current recommendation once it is available.
 
-**Minimap arrow** is on by default and works with any panel mode. After you leave your house and arrive at the recommended landing, a pulsing arrow marks where to click for the next stretch of the planned walk. The arrow pauses at manual passages such as doors and ladders, and it resumes when you reach the next walking stretch. It hides when you reach the task, move away from the mapped route, or lose access to a remaining passage.
+**Minimap arrow** is on by default and works with any panel mode. After you take the recommended teleport, a blinking yellow arrow at the minimap rim points straight toward the clue on your current floor. Find your own way around obstacles. The arrow clears when you reach the goal or change clues.
 
 ## Routing and clue coverage
 

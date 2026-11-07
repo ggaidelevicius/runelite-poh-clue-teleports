@@ -1,6 +1,5 @@
 package com.clueteleports;
 
-import com.clueteleports.routing.WalkingRouteResult;
 import com.google.gson.Gson;
 import java.awt.Graphics2D;
 import java.awt.Dimension;
@@ -252,67 +251,78 @@ public class ClueTeleportsPluginTest
 	}
 
 	@Test
-	public void minimapArrowFollowsTheWalkAfterMatchingArrivalAndPausesAtManualPassages() throws Exception
+	public void minimapArrowKeepsItsClueGoalAfterAnOffsetLandingAndWhileWalking() throws Exception
 	{
 		WorldPoint landing = first.getLocation();
-		WorldPoint east = landing.dx(1);
-		WorldPoint turn = landing.dx(2);
-		WorldPoint door = turn.dy(1);
-		WorldPoint across = turn.dy(2);
-		WorldPoint goal = turn.dy(3);
-		setRecommendationPath(List.of(new WalkingRouteResult.Step(landing, false), new WalkingRouteResult.Step(east, false),
-			new WalkingRouteResult.Step(turn, false), new WalkingRouteResult.Step(door, true),
-			new WalkingRouteResult.Step(across, false), new WalkingRouteResult.Step(goal, false)));
+		WorldPoint clueTile = landing.dx(18).dy(4);
+		WorldPoint goal = clueTile.dx(-1);
+		setRecommendationGoal(clueTile, goal);
 		enterOwnHouse();
-		assertNull(plugin.getMinimapWaypoint());
-		// A nearby landing is plausible, but the fixture cannot prove an off-path join.
-		leaveHouseAt(landing.dy(-1));
-		assertNull(plugin.getMinimapWaypoint());
-		playerPosition = landing;
+		assertNull(plugin.getMinimapTarget());
+		leaveHouseAt(landing.dy(-4));
+		assertEquals(goal, plugin.getMinimapTarget());
+
+		playerPosition = landing.dx(12).dy(-5);
 		tick();
-		assertEquals(turn, plugin.getMinimapWaypoint());
-		playerPosition = turn;
-		tick();
-		assertEquals(door, plugin.getMinimapWaypoint());
-		playerPosition = door;
-		tick();
-		assertNull(plugin.getMinimapWaypoint());
+		assertEquals(goal, plugin.getMinimapTarget());
+
 		changeGameState(GameState.LOADING);
-		playerPosition = across;
+		assertNull(plugin.getMinimapTarget());
+		playerPosition = landing.dx(13).dy(-3);
 		changeGameState(GameState.LOGGED_IN);
 		tick();
-		assertEquals(goal, plugin.getMinimapWaypoint());
+		assertEquals(goal, plugin.getMinimapTarget());
+
 		playerPosition = goal;
 		tick();
-		assertNull(plugin.getMinimapWaypoint());
+		assertNull(plugin.getMinimapTarget());
+		playerPosition = goal.dx(-1);
+		tick();
+		assertNull(plugin.getMinimapTarget());
+	}
+
+	@Test
+	public void aNewClueClearsTheActiveMinimapTarget() throws Exception
+	{
+		WorldPoint landing = first.getLocation();
+		WorldPoint goal = landing.dx(18).dy(4);
+		setRecommendationGoal(goal, goal);
+		enterOwnHouse();
+		leaveHouseAt(landing);
+		assertEquals(goal, plugin.getMinimapTarget());
+
+		WorldPoint newGoal = goal.dy(12);
+		setRecommendationGoal(newGoal, newGoal);
+		tick();
+		assertNull(plugin.getMinimapTarget());
 	}
 
 	@Test
 	public void wrongArrivalDoesNotArmTheArrowForLaterWalking() throws Exception
 	{
 		WorldPoint landing = first.getLocation();
-		setRecommendationPath(List.of(new WalkingRouteResult.Step(landing, false),
-			new WalkingRouteResult.Step(landing.dx(1), false)));
+		WorldPoint goal = landing.dx(1);
+		setRecommendationGoal(goal, goal);
 		enterOwnHouse();
 		leaveHouseAt(second.getLocation());
-		assertNull(plugin.getMinimapWaypoint());
+		assertNull(plugin.getMinimapTarget());
 		playerPosition = landing;
 		tick();
-		assertNull(plugin.getMinimapWaypoint());
+		assertNull(plugin.getMinimapTarget());
 	}
 
-	private void setRecommendationPath(List<WalkingRouteResult.Step> steps) throws Exception
+	private void setRecommendationGoal(WorldPoint clueTile, WorldPoint goal) throws Exception
 	{
-		WorldPoint goal = steps.get(steps.size() - 1).getLocation();
-		setClue(new FixedLocationClue(goal));
+		setClue(new FixedLocationClue(clueTile));
+		int walkingTiles = first.getLocation().distanceTo(goal);
 		setField(plugin, "routing", (TeleportRouting) (client, profile, targets, arrivals, radius) ->
-			TeleportRouting.Plan.found(first, goal, steps.size(), steps.size() - 1, 0, steps));
+			TeleportRouting.Plan.found(first, goal, walkingTiles, walkingTiles, 0));
 	}
 
 	private void leaveHouseAt(WorldPoint position)
 	{
 		changeGameState(GameState.LOADING);
-		assertNull(plugin.getMinimapWaypoint());
+		assertNull(plugin.getMinimapTarget());
 		tick();
 		playerPosition = position;
 		baseX = position.getX() & ~63;

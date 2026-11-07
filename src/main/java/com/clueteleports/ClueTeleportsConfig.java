@@ -32,7 +32,7 @@ public interface ClueTeleportsConfig extends Config
 	@ConfigItem(
 		keyName = "minimapArrow",
 		name = "Minimap arrow",
-		description = "Guide the walk after teleporting.",
+		description = "Point toward the clue after teleporting.",
 		position = 2
 	)
 	default boolean minimapArrow()

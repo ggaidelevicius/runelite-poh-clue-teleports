@@ -12,8 +12,6 @@ interface TeleportRouting extends AutoCloseable
 {
 	Plan update(Client client, String profile, List<WorldPoint> targets,
 		Collection<TeleportDestination> arrivals, int interactionRadius);
-	default boolean canWalk(WorldPoint from, WorldPoint to) { return false; }
-	default boolean canFollow(List<WalkingRouteResult.Step> steps, int start) { return true; }
 	default void invalidate() { }
 	@Override default void close() { }
 
@@ -26,10 +24,9 @@ interface TeleportRouting extends AutoCloseable
 		final long costHalfTicks;
 		final int walkingTiles;
 		final int transitions;
-		final List<WalkingRouteResult.Step> steps;
 
 		private Plan(Status status, TeleportDestination destination, WorldPoint target,
-			long costHalfTicks, int walkingTiles, int transitions, List<WalkingRouteResult.Step> steps)
+			long costHalfTicks, int walkingTiles, int transitions)
 		{
 			this.status = status;
 			this.destination = destination;
@@ -37,29 +34,20 @@ interface TeleportRouting extends AutoCloseable
 			this.costHalfTicks = costHalfTicks;
 			this.walkingTiles = walkingTiles;
 			this.transitions = transitions;
-			this.steps = List.copyOf(steps);
 		}
 
-		static Plan status(Status status) { return new Plan(status, null, null, 0, 0, 0, List.of()); }
+		static Plan status(Status status) { return new Plan(status, null, null, 0, 0, 0); }
 
 		static Plan found(TeleportDestination destination, WorldPoint target, long cost, int tiles, int transitions)
 		{
-			return found(destination, target, cost, tiles, transitions, List.of());
-		}
-
-		static Plan found(TeleportDestination destination, WorldPoint target, long cost, int tiles, int transitions,
-			List<WalkingRouteResult.Step> steps)
-		{
-			return new Plan(Status.FOUND, Objects.requireNonNull(destination), Objects.requireNonNull(target),
-				cost, tiles, transitions, steps);
+			return new Plan(Status.FOUND, Objects.requireNonNull(destination), Objects.requireNonNull(target), cost, tiles, transitions);
 		}
 
 		static Plan from(WalkingRouteResult result)
 		{
 			switch (result.getStatus())
 			{
-				case FOUND: return found(result.getDestination(), result.getTarget(), result.getCostHalfTicks(),
-					result.getWalkingTiles(), result.getTransitionCount(), result.getSteps());
+				case FOUND: return found(result.getDestination(), result.getTarget(), result.getCostHalfTicks(), result.getWalkingTiles(), result.getTransitionCount());
 				case LIMIT: return status(Status.LIMIT);
 				case CANCELLED: return status(Status.SEARCHING);
 				default: return status(Status.NO_ROUTE);

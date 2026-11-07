@@ -252,28 +252,6 @@ public class AsyncRoutePlannerTest
 	}
 
 	@Test
-	public void guidanceRejectsAClosedPassageOnlyWhileItIsAhead() throws Exception
-	{
-		AsyncRoutePlanner planner = ready(table("", "", "", "9=1"));
-		WorldPoint target = point(51, 50);
-		List<TeleportDestination> arrivals = List.of(arrival("near-shortcut", point(3, 4)));
-		update(planner, target, arrivals);
-		worker.run(1);
-		Plan planned = update(planner, target, arrivals);
-		assertEquals(Plan.Status.FOUND, planned.status);
-		assertEquals(4, planned.steps.size());
-		assertTrue(planned.steps.get(1).isPassageToNext());
-		assertTrue(planner.canFollow(planned.steps, 0));
-
-		varbit = 0;
-		update(planner, target, List.of());
-
-		assertFalse(planner.canFollow(planned.steps, 0));
-		assertFalse(planner.canFollow(planned.steps, 1));
-		assertTrue(planner.canFollow(planned.steps, 2));
-	}
-
-	@Test
 	public void accountChangesOnlyInvalidateWhenTheyChangeTheEligiblePassages() throws Exception
 	{
 		AsyncRoutePlanner planner = ready(table("", "995=10", "Tree Gnome Village", "9=1"));

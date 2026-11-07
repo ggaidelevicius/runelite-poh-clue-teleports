@@ -121,29 +121,6 @@ final class AsyncRoutePlanner implements TeleportRouting
 	}
 
 	@Override
-	public boolean canWalk(WorldPoint from, WorldPoint to)
-	{
-		RoutingData loaded = data;
-		return !closed && loaded != null && loaded.getCollisionMap().canWalk(RouteGoals.pack(from), RouteGoals.pack(to));
-	}
-
-	@Override
-	public synchronized boolean canFollow(List<WalkingRouteResult.Step> steps, int start)
-	{
-		if (closed || request == null) return false;
-		List<RouteTransport> eligible = request.eligible;
-		for (int i = start; i + 1 < steps.size(); i++)
-		{
-			WalkingRouteResult.Step step = steps.get(i);
-			if (!step.isPassageToNext()) continue;
-			int from = RouteGoals.pack(step.getLocation());
-			int to = RouteGoals.pack(steps.get(i + 1).getLocation());
-			if (eligible.stream().noneMatch(edge -> edge.getFrom() == from && edge.getTo() == to)) return false;
-		}
-		return true;
-	}
-
-	@Override
 	public synchronized void invalidate()
 	{
 		generation.incrementAndGet();

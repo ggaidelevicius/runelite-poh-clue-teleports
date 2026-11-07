@@ -1,6 +1,5 @@
 package com.clueteleports;
 
-import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -9,17 +8,17 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Area;
 import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
 import java.util.Objects;
 import java.util.function.Supplier;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Perspective;
 import net.runelite.api.Player;
-import net.runelite.api.Point;
 import net.runelite.api.SpritePixels;
 import net.runelite.api.WorldView;
-import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.SpriteID;
@@ -29,22 +28,23 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
 
-/** Draws the current route waypoint on the native minimap. */
+/** Draws the current route direction on the native minimap rim. */
 final class ClueMinimapOverlay extends Overlay
 {
-	private static final Color ARROW_COLOR = new Color(85, 225, 255);
 	private static final BasicStroke OUTLINE = new BasicStroke(2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-	// A client game cycle is 20 ms. Keep the pulse visible throughout its 1.2-second period.
-	private static final int PULSE_CYCLES = 60;
+	private static final int RIM_MARGIN = 2;
+	// A client game cycle is 20 ms: show for 0.8 seconds, then pause for 0.4 seconds.
+	private static final int BLINK_CYCLES = 60;
+	private static final int VISIBLE_CYCLES = 40;
 	private final Client client;
-	private final Supplier<WorldPoint> waypoint;
+	private final Supplier<WorldPoint> clueTarget;
 	private Shape fixedMask;
 	private Shape resizableMask;
 
-	ClueMinimapOverlay(Client client, Supplier<WorldPoint> waypoint)
+	ClueMinimapOverlay(Client client, Supplier<WorldPoint> clueTarget)
 	{
 		this.client = Objects.requireNonNull(client, "client");
-		this.waypoint = Objects.requireNonNull(waypoint, "waypoint");
+		this.clueTarget = Objects.requireNonNull(clueTarget, "clueTarget");
 		setPosition(OverlayPosition.DYNAMIC);
 		setPriority(PRIORITY_LOW);
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
@@ -53,10 +53,11 @@ final class ClueMinimapOverlay extends Overlay
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
-		WorldPoint target = waypoint.get();
+		WorldPoint target = clueTarget.get();
 		if (target == null || client.getGameState() != GameState.LOGGED_IN
 			|| client.getVarbitValue(VarbitID.MINIMAP_TOGGLE) != 0
 			|| client.getVarbitValue(VarbitID.MINIMAP_STATE) != 0
+			|| Math.floorMod(client.getGameCycle(), BLINK_CYCLES) >= VISIBLE_CYCLES
 			|| isVisible(client.getWidget(InterfaceID.Worldmap.MAP_CONTAINER)))
 		{
 			return null;
@@ -80,20 +81,22 @@ final class ClueMinimapOverlay extends Overlay
 		{
 			return null;
 		}
-		LocalPoint playerLocation = player.getLocalLocation();
-		LocalPoint targetLocation = LocalPoint.fromWorld(view, target);
-		if (playerLocation == null || targetLocation == null)
-		{
-			return null;
-		}
-		Point from = Perspective.localToMinimap(client, playerLocation);
-		Point to = Perspective.localToMinimap(client, targetLocation);
-		if (from == null || to == null || from.equals(to) || !bounds.contains(to.getX(), to.getY()))
+		// World locations are server tiles. Local locations interpolate as the player moves.
+		WorldPoint playerLocation = player.getWorldLocation();
+		if (playerLocation == null || playerLocation.getPlane() != target.getPlane() || playerLocation.equals(target))
 		{
 			return null;
 		}
 		Shape mask = minimapMask(resized);
-		if (mask == null || !mask.contains(to.getX() - bounds.x, to.getY() - bounds.y))
+		if (mask == null)
+		{
+			return null;
+		}
+		double bearing = Math.atan2(target.getY() - playerLocation.getY(), target.getX() - playerLocation.getX());
+		// As in Perspective.localToMinimap, rotate by minimap yaw and reverse world Y for canvas Y.
+		double angle = (client.getCameraYawTarget() & 0x3fff) * Perspective.UNIT14 - bearing;
+		Shape arrow = rimArrow(mask, bounds.width, bounds.height, angle);
+		if (arrow == null)
 		{
 			return null;
 		}
@@ -102,15 +105,13 @@ final class ClueMinimapOverlay extends Overlay
 		try
 		{
 			copy.clip(bounds);
-			copy.clip(AffineTransform.getTranslateInstance(bounds.x, bounds.y).createTransformedShape(mask));
+			copy.translate(bounds.x, bounds.y);
+			copy.clip(mask);
 			copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			double phase = Math.floorMod(client.getGameCycle(), PULSE_CYCLES) * (2 * Math.PI / PULSE_CYCLES);
-			copy.setComposite(AlphaComposite.SrcOver.derive((float) (0.7 + 0.3 * Math.cos(phase))));
-			Shape arrow = arrow(from, to);
 			copy.setStroke(OUTLINE);
 			copy.setColor(Color.BLACK);
 			copy.draw(arrow);
-			copy.setColor(ARROW_COLOR);
+			copy.setColor(Color.YELLOW);
 			copy.fill(arrow);
 		}
 		finally
@@ -179,24 +180,39 @@ final class ClueMinimapOverlay extends Overlay
 				}
 			}
 		}
-		return mask;
+		return new Area(mask);
 	}
 
-	private static Shape arrow(Point from, Point to)
+	private static Shape rimArrow(Shape mask, int width, int height, double angle)
 	{
-		double dx = to.getX() - from.getX();
-		double dy = to.getY() - from.getY();
-		double length = Math.hypot(dx, dy);
-		double ux = dx / length;
-		double uy = dy / length;
-		int x = to.getX();
-		int y = to.getY();
+		double ux = Math.cos(angle);
+		double uy = Math.sin(angle);
 		Path2D arrow = new Path2D.Double();
-		arrow.moveTo(x, y);
-		arrow.lineTo(x - 10 * ux - 4 * uy, y - 10 * uy + 4 * ux);
-		arrow.lineTo(x - 7 * ux, y - 7 * uy);
-		arrow.lineTo(x - 10 * ux + 4 * uy, y - 10 * uy - 4 * ux);
+		arrow.moveTo(0, 0);
+		arrow.lineTo(-10 * ux - 4 * uy, -10 * uy + 4 * ux);
+		arrow.lineTo(-7 * ux, -7 * uy);
+		arrow.lineTo(-10 * ux + 4 * uy, -10 * uy - 4 * ux);
 		arrow.closePath();
-		return arrow;
+		Rectangle2D footprint = arrow.getBounds2D();
+		double footprintWidth = footprint.getWidth() + 2 * RIM_MARGIN;
+		double footprintHeight = footprint.getHeight() + 2 * RIM_MARGIN;
+
+		double centerX = width / 2.0;
+		double centerY = height / 2.0;
+		double rim = Math.min(centerX / Math.abs(ux), centerY / Math.abs(uy));
+		// Walk inward from the widget edge until the entire arrow and outline fit the aperture.
+		for (int radius = (int) rim; radius >= Math.min(width, height) / 4; radius--)
+		{
+			double x = centerX + radius * ux;
+			double y = centerY + radius * uy;
+			double left = x + footprint.getX() - RIM_MARGIN;
+			double top = y + footprint.getY() - RIM_MARGIN;
+			if (left >= 0 && top >= 0 && left + footprintWidth <= width && top + footprintHeight <= height
+				&& mask.contains(left, top, footprintWidth, footprintHeight))
+			{
+				return AffineTransform.getTranslateInstance(x, y).createTransformedShape(arrow);
+			}
+		}
+		return null;
 	}
 }

@@ -1,7 +1,6 @@
 package com.clueteleports.routing;
 
 import com.clueteleports.TeleportDestination;
-import java.util.List;
 import java.util.Objects;
 import net.runelite.api.coords.WorldPoint;
 
@@ -19,10 +18,9 @@ public final class WalkingRouteResult
 	private final long costHalfTicks;
 	private final int walkingTiles;
 	private final int transitionCount;
-	private final List<Step> steps;
 
 	private WalkingRouteResult(Status status, TeleportDestination destination, WorldPoint target,
-		long costHalfTicks, int walkingTiles, int transitionCount, List<Step> steps)
+		long costHalfTicks, int walkingTiles, int transitionCount)
 	{
 		this.status = status;
 		this.destination = destination;
@@ -30,19 +28,13 @@ public final class WalkingRouteResult
 		this.costHalfTicks = costHalfTicks;
 		this.walkingTiles = walkingTiles;
 		this.transitionCount = transitionCount;
-		this.steps = List.copyOf(steps);
 	}
 
 	static WalkingRouteResult found(TeleportDestination destination, WorldPoint target,
 		long costHalfTicks, int walkingTiles, int transitionCount)
 	{
 		return new WalkingRouteResult(Status.FOUND, Objects.requireNonNull(destination),
-			Objects.requireNonNull(target), costHalfTicks, walkingTiles, transitionCount, List.of());
-	}
-
-	WalkingRouteResult withSteps(List<Step> steps)
-	{
-		return new WalkingRouteResult(status, destination, target, costHalfTicks, walkingTiles, transitionCount, steps);
+			Objects.requireNonNull(target), costHalfTicks, walkingTiles, transitionCount);
 	}
 
 	public static WalkingRouteResult withoutRoute(Status status)
@@ -51,7 +43,7 @@ public final class WalkingRouteResult
 		{
 			throw new IllegalArgumentException("A found route requires a destination and target");
 		}
-		return new WalkingRouteResult(Objects.requireNonNull(status), null, null, -1, 0, 0, List.of());
+		return new WalkingRouteResult(Objects.requireNonNull(status), null, null, -1, 0, 0);
 	}
 
 	public Status getStatus()
@@ -95,30 +87,8 @@ public final class WalkingRouteResult
 		return transitionCount;
 	}
 
-	/** The proven route in travel order, including the arrival and goal. */
-	public List<Step> getSteps()
-	{
-		return steps;
-	}
-
 	public double getEstimatedRunTicks()
 	{
 		return isFound() ? costHalfTicks / 2.0 : -1.0;
-	}
-
-	/** A tile and whether the following step requires a physical passage. */
-	public static final class Step
-	{
-		private final WorldPoint location;
-		private final boolean passageToNext;
-
-		public Step(WorldPoint location, boolean passageToNext)
-		{
-			this.location = Objects.requireNonNull(location);
-			this.passageToNext = passageToNext;
-		}
-
-		public WorldPoint getLocation() { return location; }
-		public boolean isPassageToNext() { return passageToNext; }
 	}
 }
