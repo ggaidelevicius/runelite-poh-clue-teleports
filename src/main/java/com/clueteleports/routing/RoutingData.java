@@ -31,9 +31,10 @@ public final class RoutingData
 	{
 		try (InputStream collision = resource("collision-map.zip");
 			InputStream passages = resource("transports.tsv");
-			InputStream shortcuts = resource("agility_shortcuts.tsv"))
+			InputStream shortcuts = resource("agility_shortcuts.tsv");
+			InputStream supplemental = resource("supplemental_transports.tsv"))
 		{
-			return load(collision, passages, shortcuts);
+			return load(WalkingCollisionMap.load(collision), passages, shortcuts, supplemental);
 		}
 	}
 
@@ -42,13 +43,16 @@ public final class RoutingData
 	{
 		try (InputStream collisionStream = collision; InputStream passageStream = passages; InputStream shortcutStream = shortcuts)
 		{
-			WalkingCollisionMap map = WalkingCollisionMap.load(collisionStream);
-			List<RouteTransport> transports = new ArrayList<>();
-			Set<Long> barriers = new HashSet<>();
-			read(passageStream, transports, barriers);
-			read(shortcutStream, transports, barriers);
-			return new RoutingData(map.withTransportBarriers(barriers), transports);
+			return load(WalkingCollisionMap.load(collisionStream), passageStream, shortcutStream);
 		}
+	}
+
+	private static RoutingData load(WalkingCollisionMap map, InputStream... tables) throws IOException
+	{
+		List<RouteTransport> transports = new ArrayList<>();
+		Set<Long> barriers = new HashSet<>();
+		for (InputStream table : tables) read(table, transports, barriers);
+		return new RoutingData(map.withTransportBarriers(barriers), transports);
 	}
 
 	public WalkingCollisionMap getCollisionMap() { return collisionMap; }

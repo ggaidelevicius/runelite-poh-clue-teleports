@@ -113,12 +113,13 @@ public final class WalkingRouteSearch
 		Nodes nodes = new Nodes(maxNodes);
 		for (int index = 0; index < targets.size(); index++)
 		{
-			if (!nodes.relax(pack(targets.get(index)), 0, index, 0, 0))
+			if (!nodes.relax(pack(targets.get(index)), 0, index, 0, 0, -1))
 			{
 				return WalkingRouteResult.withoutRoute(WalkingRouteResult.Status.LIMIT);
 			}
 		}
 		WalkingRouteResult best = null;
+		int bestNode = -1;
 		int settled = 0;
 		while (!nodes.isEmpty())
 		{
@@ -132,7 +133,7 @@ public final class WalkingRouteSearch
 				// budget once every remaining label is strictly more expensive.
 				if (best != null && nodes.minimumCost() > best.getCostHalfTicks())
 				{
-					return best;
+					return best.withSteps(nodes.steps(bestNode));
 				}
 				if (nanoTime.getAsLong() - started >= maxNanos)
 				{
@@ -143,7 +144,7 @@ public final class WalkingRouteSearch
 			long cost = nodes.costs[node];
 			if (best != null && cost > best.getCostHalfTicks())
 			{
-				return best;
+				return best.withSteps(nodes.steps(bestNode));
 			}
 			settled++;
 			int point = nodes.points[node];
@@ -155,6 +156,7 @@ public final class WalkingRouteSearch
 				if (best == null || compare(candidate, best) < 0)
 				{
 					best = candidate;
+					bestNode = node;
 				}
 			}
 			if (best != null)
@@ -178,7 +180,7 @@ public final class WalkingRouteSearch
 				if ((collision.canWalk(neighbour, point)
 					|| destinations.containsKey(neighbour) && collision.canLeaveArrival(neighbour, point))
 					&& !nodes.relax(neighbour, cost + 1, nodes.goals[node],
-						nodes.walking[node] + 1, nodes.transitions[node]))
+						nodes.walking[node] + 1, nodes.transitions[node], node))
 				{
 					return WalkingRouteResult.withoutRoute(WalkingRouteResult.Status.LIMIT);
 				}
@@ -190,7 +192,7 @@ public final class WalkingRouteSearch
 				{
 					long duration = 2L * Math.max(1, edge.getDurationTicks());
 					if (!nodes.relax(edge.getFrom(), cost + duration, nodes.goals[node],
-						nodes.walking[node], nodes.transitions[node] + 1))
+						nodes.walking[node], nodes.transitions[node] + 1, node))
 					{
 						return WalkingRouteResult.withoutRoute(WalkingRouteResult.Status.LIMIT);
 					}
@@ -201,7 +203,8 @@ public final class WalkingRouteSearch
 		{
 			return WalkingRouteResult.withoutRoute(WalkingRouteResult.Status.CANCELLED);
 		}
-		return best == null ? WalkingRouteResult.withoutRoute(WalkingRouteResult.Status.NO_ROUTE) : best;
+		return best == null ? WalkingRouteResult.withoutRoute(WalkingRouteResult.Status.NO_ROUTE)
+			: best.withSteps(nodes.steps(bestNode));
 	}
 
 	private static int compare(WalkingRouteResult first, WalkingRouteResult second)
@@ -257,6 +260,7 @@ public final class WalkingRouteSearch
 		private int[] goals;
 		private int[] walking;
 		private int[] transitions;
+		private int[] nextNodes;
 		private int[] heapPositions;
 		private int[] table;
 		private int[] heap;
@@ -271,6 +275,7 @@ public final class WalkingRouteSearch
 			goals = new int[capacity];
 			walking = new int[capacity];
 			transitions = new int[capacity];
+			nextNodes = new int[capacity];
 			heapPositions = new int[capacity];
 			table = new int[8192];
 			heap = new int[capacity];
@@ -286,7 +291,7 @@ public final class WalkingRouteSearch
 			return costs[heap[0]];
 		}
 
-		private boolean relax(int point, long cost, int goal, int walked, int actions)
+		private boolean relax(int point, long cost, int goal, int walked, int actions, int nextNode)
 		{
 			int slot = slot(point);
 			int index = table[slot] - 1;
@@ -321,6 +326,7 @@ public final class WalkingRouteSearch
 			goals[index] = goal;
 			walking[index] = walked;
 			transitions[index] = actions;
+			nextNodes[index] = nextNode;
 			int position = heapPositions[index];
 			if (position == -1)
 			{
@@ -330,6 +336,21 @@ public final class WalkingRouteSearch
 			}
 			up(position);
 			return true;
+		}
+
+		private List<WalkingRouteResult.Step> steps(int arrivalNode)
+		{
+			List<WalkingRouteResult.Step> steps = new ArrayList<>(walking[arrivalNode] + transitions[arrivalNode] + 1);
+			for (int node = arrivalNode; node >= 0; node = nextNodes[node])
+			{
+				int point = points[node];
+				WorldPoint location = new WorldPoint((point >>> 14) & 0x3fff, point & 0x3fff, point >>> 28);
+				int next = nextNodes[node];
+				// The successor was already settled when this label was accepted.
+				// Only physical passages leave the ordinary walking count unchanged.
+				steps.add(new WalkingRouteResult.Step(location, next >= 0 && walking[node] == walking[next]));
+			}
+			return steps;
 		}
 
 		private boolean better(long cost, int goal, int walked, int actions, int existing)
@@ -437,6 +458,7 @@ public final class WalkingRouteSearch
 			goals = Arrays.copyOf(goals, capacity);
 			walking = Arrays.copyOf(walking, capacity);
 			transitions = Arrays.copyOf(transitions, capacity);
+			nextNodes = Arrays.copyOf(nextNodes, capacity);
 			heapPositions = Arrays.copyOf(heapPositions, capacity);
 			heap = Arrays.copyOf(heap, capacity);
 		}

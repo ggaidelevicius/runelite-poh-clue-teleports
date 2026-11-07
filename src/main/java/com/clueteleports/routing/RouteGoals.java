@@ -12,7 +12,7 @@ public final class RouteGoals
 {
 	private RouteGoals() { }
 
-	static int pack(WorldPoint point) { return point.getPlane() << 28 | point.getX() << 14 | point.getY(); }
+	public static int pack(WorldPoint point) { return point.getPlane() << 28 | point.getX() << 14 | point.getY(); }
 
 	public static List<WorldPoint> qualify(WalkingCollisionMap collision, List<WorldPoint> targets, int interactionRadius)
 	{

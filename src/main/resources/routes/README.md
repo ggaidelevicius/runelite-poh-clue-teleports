@@ -17,13 +17,17 @@ download is needed.
 * `transports.tsv`: 5,610 directed physical passage records for doors,
   gates, stairs, ladders, entrances, exits, and other local links.
 * `agility_shortcuts.tsv`: 661 directed shortcut records.
+* `supplemental_transports.tsv`: selected physical passages from a newer
+  Shortest Path commit, with the source pinned beside the rows. These add
+  the Twilight Temple lift and the Tonali lift and rope without changing the
+  original upstream files.
 * `item-variations.tsv`: named item families used by the requirement parser.
 * `config-items.tsv`: upstream descriptions documenting special unlock
   declarations; it is reference data and does not enable manual unlocks.
 
 The other upstream transport families are deliberately not loaded: a route
 starts at one confirmed POH arrival, then uses ordinary movement and the
-two physical passage tables. It cannot add another inventory, spellbook,
+physical passage tables. It cannot add another inventory, spellbook,
 minigame, fairy ring, spirit tree, or POH teleport halfway through a route.
 Boats, charters, gliders, and similar separate network tables are also omitted.
 
@@ -80,7 +84,8 @@ unknown rather than reverting to straight-line ranking.
 2. Review `pathfinder/SplitFlagMap.java`, `CollisionMap.java`,
    `transport/parser/`, requirement handling, and changes to these data files.
 3. Copy the original files and license unchanged, and regenerate the manifest
-   checksums and footprint figures.
+   checksums and footprint figures. Remove supplemental rows that are already
+   present in the updated base tables.
 4. Run the finite route, requirement, gate, stairs, and real-map regression
    tests. Check representative routes in a user-started client separately.
 

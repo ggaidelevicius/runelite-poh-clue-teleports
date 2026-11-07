@@ -29,6 +29,17 @@ public interface ClueTeleportsConfig extends Config
 		return false;
 	}
 
+	@ConfigItem(
+		keyName = "minimapArrow",
+		name = "Minimap arrow",
+		description = "Guide the walk after teleporting.",
+		position = 2
+	)
+	default boolean minimapArrow()
+	{
+		return true;
+	}
+
 	enum OverlayMode
 	{
 		FULL("Full"),

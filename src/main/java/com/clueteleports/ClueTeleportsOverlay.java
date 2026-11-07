@@ -13,10 +13,11 @@ import javax.inject.Inject;
 import net.runelite.api.MenuAction;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.ComponentConstants;
-import net.runelite.client.util.Text;
+import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
+import net.runelite.client.util.ColorUtil;
+import net.runelite.client.util.Text;
 
 public final class ClueTeleportsOverlay extends OverlayPanel
 {
@@ -57,9 +58,15 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 			return null;
 		}
 		String compact = mode == ClueTeleportsConfig.OverlayMode.COMPACT ? display.compactText() : null;
+		FontMetrics metrics = graphics.getFontMetrics();
+		int width = contentWidth(metrics, display, compact);
 		setPreferredSize(null);
-		panelComponent.setPreferredSize(new Dimension(contentWidth(graphics.getFontMetrics(), display, compact), 0));
-		if (compact != null)
+		panelComponent.setPreferredSize(new Dimension(width, 0));
+		if (compact != null && display.recommendation)
+		{
+			addCompactRecommendation(display, metrics, width - 2 * ComponentConstants.STANDARD_BORDER);
+		}
+		else if (compact != null)
 		{
 			panelComponent.getChildren().add(LineComponent.builder().left(compact).build());
 		}
@@ -81,7 +88,8 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 		{
 			panelComponent.getChildren().add(TitleComponent.builder().text("POH clue teleport").color(Color.CYAN).build());
 			panelComponent.getChildren().add(LineComponent.builder().left(display.first).build());
-			panelComponent.getChildren().add(LineComponent.builder().left(display.second).build());
+			panelComponent.getChildren().add(LineComponent.builder().left(display.second)
+				.leftColor(display.recommendation ? Color.LIGHT_GRAY : Color.WHITE).build());
 			if (display.third != null)
 			{
 				panelComponent.getChildren().add(LineComponent.builder().left(display.third).leftColor(Color.LIGHT_GRAY).build());
@@ -99,6 +107,27 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 		return super.render(graphics);
 	}
 
+	private void addCompactRecommendation(Display display, FontMetrics metrics, int width)
+	{
+		String facility = display.first + ":";
+		String destination = display.second;
+		int end = destination.length();
+		// RuneLite's line breaking counts the color tag and restarts the color on each row.
+		// Fit the first row before adding the tag, then let the remaining text wrap in grey.
+		while (end > 0 && textWidth(metrics, facility + " " + destination.substring(0, end)) > width)
+		{
+			end = destination.lastIndexOf(' ', end - 1);
+		}
+		String firstLine = end > 0
+			? facility + " " + ColorUtil.prependColorTag(destination.substring(0, end), Color.LIGHT_GRAY)
+			: facility;
+		panelComponent.getChildren().add(LineComponent.builder().left(firstLine).build());
+		if (end < destination.length())
+		{
+			panelComponent.getChildren().add(LineComponent.builder().left(destination.substring(end + 1))
+				.leftColor(Color.LIGHT_GRAY).build());
+		}
+	}
 
 	private static int contentWidth(FontMetrics metrics, Display display, String compact)
 	{

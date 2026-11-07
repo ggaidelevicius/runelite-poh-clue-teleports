@@ -52,7 +52,8 @@ runelite/runelite FairyRingLocation at e336ac270345c6c48e0fa69a6432d7fa03c5eb76,
 TeleportLocationData at 9fad2c588ca957ae47d883b09544725a796ed9fe, and
 RunecraftingAltarLocation, AgilityCourseLocation, and HunterAreaLocation at
 runelite-parent-1.13.3. Task sites also use emerald000/clue-helper at commit
-b1a5e772d45373bac133bfa28a1ded6a38b910b3.
+b1a5e772d45373bac133bfa28a1ded6a38b910b3, including the Frost Nagua spawn in
+CrypticCombatLocations.
 
 Copyright (c) 2018, Morgan Lewis <https://github.com/MESLewis>
 Copyright (c) 2019, Dava96 <https://github.com/Dava96>
@@ -118,6 +119,7 @@ Walking-route resources
 
 The bundled collision map, physical passages, agility shortcuts, and item aliases
 under routes/ are adapted from Skretzo/shortest-path at commit
-31c2e313a348a00fb49dfbee53461610681f94d6. The exact upstream BSD license is also
-included in routes/UPSTREAM-LICENSE.txt, with file hashes and update instructions
-in routes/upstream-manifest.json and routes/README.md.
+31c2e313a348a00fb49dfbee53461610681f94d6. Supplemental physical passages use
+commit 375ce2c061df5c3961116dda6443f307df3223f1. The exact upstream BSD license
+is also included in routes/UPSTREAM-LICENSE.txt, with base file hashes and
+update instructions in routes/upstream-manifest.json and routes/README.md.

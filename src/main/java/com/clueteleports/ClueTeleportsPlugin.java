@@ -13,6 +13,9 @@ import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.Player;
+import net.runelite.api.WorldView;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -60,6 +63,7 @@ public class ClueTeleportsPlugin extends Plugin
 	private final FairyRingTravelLog fairyTravelLog = new FairyRingTravelLog();
 	private final NexusMenuScroll nexusMenuScroll = new NexusMenuScroll();
 	private final RecommendationMessages recommendationMessages = new RecommendationMessages();
+	private final ArrivalGuidance arrivalGuidance = new ArrivalGuidance();
 	private TeleportRouting routing;
 	private final HouseContext houseContext = new HouseContext();
 	private final MenuObservations observations = new MenuObservations();
@@ -70,6 +74,7 @@ public class ClueTeleportsPlugin extends Plugin
 	private String pendingInventory;
 	private boolean ownHouse;
 	private HouseLearningOverlay learningOverlay;
+	private ClueMinimapOverlay minimapOverlay;
 	private volatile HouseLearningOverlay.Guidance guidance = new HouseLearningOverlay.Guidance(false,
 		Collections.emptySet(), null, null);
 	private volatile ClueTeleportsOverlay.Display display;
@@ -97,6 +102,8 @@ public class ClueTeleportsPlugin extends Plugin
 		overlayManager.add(overlay);
 		learningOverlay = new HouseLearningOverlay(client, this::getGuidance, nativeMenus);
 		overlayManager.add(learningOverlay);
+		minimapOverlay = new ClueMinimapOverlay(client, this::getMinimapWaypoint);
+		overlayManager.add(minimapOverlay);
 		clientThread.invokeLater(() -> refresh(false));
 	}
 
@@ -105,6 +112,7 @@ public class ClueTeleportsPlugin extends Plugin
 	{
 		running = false;
 		recommendationMessages.reset();
+		arrivalGuidance.clear();
 		if (routing != null) routing.close();
 		routing = null;
 		clearGuidance();
@@ -121,6 +129,8 @@ public class ClueTeleportsPlugin extends Plugin
 		overlayManager.remove(overlay);
 		if (learningOverlay != null) overlayManager.remove(learningOverlay);
 		learningOverlay = null;
+		if (minimapOverlay != null) overlayManager.remove(minimapOverlay);
+		minimapOverlay = null;
 	}
 
 	@Subscribe
@@ -203,6 +213,10 @@ public class ClueTeleportsPlugin extends Plugin
 		}
 		if (event.getGameState() != GameState.LOGGED_IN)
 		{
+			// An ordinary scene load can be the recommended teleport or a
+			// manual route passage. Keep its snapshot while the scene settles.
+			if (event.getGameState() == GameState.LOADING) arrivalGuidance.hide();
+			else arrivalGuidance.clear();
 			invalidateRoute();
 			ownHouse = false;
 			clearGuidance();
@@ -256,6 +270,7 @@ public class ClueTeleportsPlugin extends Plugin
 		}
 		if (!loggedIn || currentProfile == null)
 		{
+			arrivalGuidance.hide();
 			invalidateRoute();
 			clearGuidance();
 			display = null;
@@ -290,6 +305,7 @@ public class ClueTeleportsPlugin extends Plugin
 		pending.removeAll(learned.keySet());
 		guidance = new HouseLearningOverlay.Guidance(ownHouse, pending, null, null);
 		boolean hasClue = target.getState() != ClueTargetResolver.State.NO_CLUE;
+		if (!hasClue || !houseInventory.isSurveyed() || !pending.isEmpty()) arrivalGuidance.clear();
 		if (!hasClue && !ownHouse)
 		{
 			invalidateRoute();
@@ -315,6 +331,7 @@ public class ClueTeleportsPlugin extends Plugin
 			display = null;
 			return;
 		}
+		TeleportRouting.Plan recommendation = null;
 		switch (target.getState())
 		{
 			case NO_LOCATION:
@@ -332,7 +349,13 @@ public class ClueTeleportsPlugin extends Plugin
 			case RESOLVED:
 				if (selected.isEmpty())
 				{
-					invalidateRoute();
+					// A limited-use teleport can expire on arrival. Keep checking
+					// passage eligibility for the rest of its walking route.
+					if (routing != null && config.minimapArrow() && arrivalGuidance.hasRoute())
+					{
+						routing.update(client, currentProfile, target.getLocations(), Collections.emptyList(), target.getInteractionRadius());
+					}
+					else invalidateRoute();
 					display = new ClueTeleportsOverlay.Display("No available POH teleports", "No usable destinations in learned sources", null);
 					break;
 				}
@@ -341,6 +364,7 @@ public class ClueTeleportsPlugin extends Plugin
 						.filter(destination -> selected.contains(destination.getId())).collect(Collectors.toList()), target.getInteractionRadius());
 				if (route.status == TeleportRouting.Plan.Status.FOUND)
 				{
+					recommendation = route;
 					guidance = new HouseLearningOverlay.Guidance(ownHouse, pending,
 						route.destination.getSource(), route.destination.getId());
 					display = ClueTeleportsOverlay.Display.recommendation(route.destination.getSource().getDisplayName(),
@@ -352,8 +376,26 @@ public class ClueTeleportsPlugin extends Plugin
 				else display = routeStatus(route.status);
 				break;
 		}
+		if (config.minimapArrow() && routing != null)
+		{
+			arrivalGuidance.update(client.getTickCount(), currentProfile, clue, target.getLocations(), ownHouse,
+				recommendation, this::outsidePosition, routing);
+		}
+		else arrivalGuidance.clear();
 	}
 
+	private WorldPoint outsidePosition()
+	{
+		Player player = client.getLocalPlayer();
+		WorldView view = client.getTopLevelWorldView();
+		return player != null && view != null && !view.isInstance() && player.getWorldView() == view
+			? player.getWorldLocation() : null;
+	}
+
+	WorldPoint getMinimapWaypoint()
+	{
+		return running && config.minimapArrow() ? arrivalGuidance.getWaypoint() : null;
+	}
 
 	private void invalidateRoute()
 	{

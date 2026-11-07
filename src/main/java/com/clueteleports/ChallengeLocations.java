@@ -28,57 +28,94 @@
 package com.clueteleports;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 import net.runelite.api.Client;
 import net.runelite.api.Quest;
 import net.runelite.api.QuestState;
+import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.gameval.VarPlayerID;
 
 /**
  * Verified task sites for location-specific Sherlock challenges.
  *
- * Task labels match RuneLite SkillChallengeClue in runelite-parent-1.13.3.
- * Altar, agility, and hunter coordinates follow that version's worldmap
- * RunecraftingAltarLocation, AgilityCourseLocation, and HunterAreaLocation.
- * The Slayer Tower approach is core EmoteClue's top-floor entrance marker.
- * Chest, gem stall, lectern, Nechryael, and pyre positions are adapted from
- * emerald000/clue-helper at b1a5e772d45373bac133bfa28a1ded6a38b910b3
- * (cluesteps/EliteClues.java and MasterClues.java).
+ * Task labels are RuneLite SkillChallengeClue's display labels. Altar,
+ * agility, and hunter markers come from RuneLite's world map data. The
+ * Slayer Tower approach is core EmoteClue's top-floor entrance marker.
+ * NPC, chest, gem stall, lectern, and pyre positions are adapted from
+ * emerald000/clue-helper at b1a5e772d45373bac133bfa28a1ded6a38b910b3.
  *
  * These are task sites or their normal access points, rather than every
- * possible route to them. Skullball uses the surface werewolf-course entrance.
+ * possible route to them. Dungeon entrance and rope markers are used when
+ * the full route to the task cannot be verified from the bundled map.
  * Tasks possible at arbitrary banks, fires, furnaces, anvils, or resource
  * locations intentionally have no chosen point.
  */
 final class ChallengeLocations
 {
-	private static final String BLOOD = "bind a blood rune at the blood altar.";
-	private static final WorldPoint KOUREND_BLOOD_ALTAR = new WorldPoint(1716, 3827, 0);
-	private static final WorldPoint TRUE_BLOOD_ALTAR = new WorldPoint(3625, 9717, 0);
-	private static final Map<String, WorldPoint> FIXED;
+	private static final Map<String, List<Site>> SITES;
 
 	static
 	{
-		Map<String, WorldPoint> fixed = new LinkedHashMap<>();
-		fixed.put("craft a nature rune.", new WorldPoint(2869, 3019, 0));
-		fixed.put("craft multiple cosmic runes from a single essence.", new WorldPoint(2408, 4377, 0));
-		fixed.put("score a goal in skullball.", new WorldPoint(3542, 3463, 0));
-		fixed.put("complete a lap of ape atoll agility course.", new WorldPoint(2752, 2742, 0));
-		fixed.put("complete a lap of rellekka's rooftop agility course", new WorldPoint(2624, 3677, 0));
-		fixed.put("catch a mottled eel with aerial fishing in lake molch.", new WorldPoint(1363, 3632, 0));
-		fixed.put("catch a tecu salamander.", new WorldPoint(1475, 3096, 0));
-		fixed.put("create a barrows teleport tablet.", new WorldPoint(1679, 3765, 0));
-		fixed.put("steal from a chest in ardougne castle.", new WorldPoint(2588, 3291, 1));
-		fixed.put("steal a gem from the ardougne market.", new WorldPoint(2667, 3303, 0));
-		fixed.put("cremate a set of fiyr remains.", new WorldPoint(3507, 3276, 0));
-		fixed.put("kill a nechryael in the slayer tower.", new WorldPoint(3440, 3566, 2));
-		fixed.put("equip an abyssal whip in front of the abyssal demons of the slayer tower.",
-			new WorldPoint(3421, 3537, 2));
-		FIXED = Collections.unmodifiableMap(fixed);
+		Map<String, List<Site>> sites = new LinkedHashMap<>();
+		sites.put("craft a nature rune.", List.of(site(2869, 3019, 0)));
+		sites.put("craft multiple cosmic runes from a single essence.", List.of(site(2408, 4377, 0)));
+		// Both altars complete the task. Only the true altar requires Sins of the Father.
+		sites.put("bind a blood rune at the blood altar.", List.of(site(1716, 3827, 0),
+			site(3625, 9717, 0, Quest.SINS_OF_THE_FATHER)));
+		sites.put("score a goal in skullball.", List.of(site(3542, 3463, 0)));
+		sites.put("complete a lap of ape atoll agility course.", List.of(site(2752, 2742, 0)));
+		sites.put("complete a lap of rellekka's rooftop agility course", List.of(site(2624, 3677, 0)));
+		sites.put("catch a mottled eel with aerial fishing in lake molch.", List.of(site(1363, 3632, 0)));
+		sites.put("catch a tecu salamander.", List.of(site(1475, 3096, 0)));
+		sites.put("create a barrows teleport tablet.", List.of(site(1679, 3765, 0)));
+		sites.put("steal from a chest in ardougne castle.", List.of(site(2588, 3291, 1)));
+		sites.put("steal a gem from the ardougne market.", List.of(site(2667, 3303, 0)));
+		sites.put("cremate a set of fiyr remains.", List.of(site(3507, 3276, 0)));
+		sites.put("kill a nechryael in the slayer tower.", List.of(site(3440, 3566, 2)));
+		sites.put("equip an abyssal whip in front of the abyssal demons of the slayer tower.",
+			List.of(site(3421, 3537, 2)));
+		// Catacombs and the public Smoke Dungeon chamber. The Smoke Dungeon
+		// marker is a recorded ID 423 spawn near the well, outside task-only areas.
+		// Quest Helper's DesertTreasure opens the well route at the diamond stage (11).
+		sites.put("kill a dust devil.", List.of(site(1711, 10011, 0),
+			site(3218, 9373, 0, client -> client.getVarpValue(VarPlayerID.DESERTTREASUREMAIN) >= 11)));
+		sites.put("kill a lizardman shaman.", List.of(site(1434, 3711, 0)));
+		// Main God Wars entrance before choosing a faction. The base graph
+		// omits boulder and crack requirements. Troll Stronghold stage 20 is
+		// Dad defeated, as recorded by Quest Helper's TrollStronghold guide.
+		sites.put("kill a spiritual mage while wearing something from their god.", List.of(site(2916, 3745, 0,
+			client -> client.getVarpValue(VarPlayerID.TROLL_QUEST) >= 20
+				&& Math.max(client.getBoostedSkillLevel(Skill.AGILITY), client.getBoostedSkillLevel(Skill.STRENGTH)) >= 60)));
+		// Shade Catacombs surface entrance, cache objects 4132 and 4133.
+		// The dungeon's silver and gold key doors are not in the walking graph.
+		sites.put("kill a fiyr shade inside mort'tons shade catacombs.",
+			List.of(site(3484, 3320, 0, Quest.SHADES_OF_MORTTON)));
+		sites.put("kill a reanimated abyssal demon.", List.of(site(1716, 3883, 0)));
+		// Recorded shore spawns (mejrs/data_osrs, NPC 6825).
+		sites.put("catch an anglerfish.", List.of(site(1826, 3770, 0), site(1827, 3770, 0), site(1833, 3769, 0)));
+		// Feldip and Kebos recorded spawns (NPC 5553), and RuneLite's Tlati area marker.
+		sites.put("catch a black warlock.", List.of(site(2551, 2915, 0), site(1260, 3750, 0), site(1282, 3021, 0)));
+		sites.put("catch a red chinchompa.", List.of(site(2557, 2936, 0, Quest.EAGLES_PEAK),
+			site(1315, 3169, 0, Quest.EAGLES_PEAK), site(2266, 3411, 0, Quest.EAGLES_PEAK, Quest.SONG_OF_THE_ELVES)));
+		// Public redwood rope approaches in Woodcutting Guild, cache object 28857.
+		sites.put("chop a redwood log.", List.of(site(1566, 3483, 0), site(1566, 3493, 0),
+			site(1575, 3483, 0), site(1575, 3493, 0)));
+		// Broken lamps vary by player. Route to the city entrance rather than
+		// claiming a specific lamp is broken. Light orbs must be made at the bank.
+		sites.put("fix a magical lamp in dorgesh-kaan.", List.of(site(2747, 5374, 0, Quest.DEATH_TO_THE_DORGESHUUN),
+			site(2722, 5260, 0, Quest.DEATH_TO_THE_DORGESHUUN)));
+		sites.put("craft a light orb in the dorgesh-kaan bank.", List.of(site(2701, 5349, 0, Quest.DEATH_TO_THE_DORGESHUUN)));
+		sites.put("pickpocket an elf.", List.of(site(2330, 3165, 0,
+			client -> Quest.MOURNINGS_END_PART_I.getState(client) != QuestState.NOT_STARTED),
+			site(3291, 6061, 0, Quest.SONG_OF_THE_ELVES)));
+		SITES = Collections.unmodifiableMap(sites);
 	}
 
 	private ChallengeLocations()
@@ -92,20 +129,42 @@ final class ChallengeLocations
 			return Collections.emptyList();
 		}
 		String key = challenge.trim().toLowerCase(Locale.ROOT);
-		if (BLOOD.equals(key))
+		List<WorldPoint> available = new ArrayList<>();
+		for (Site site : SITES.getOrDefault(key, List.of()))
 		{
-			List<WorldPoint> altars = new ArrayList<>();
-			altars.add(KOUREND_BLOOD_ALTAR);
-			// Both altars complete this task. The true altar requires Sins of
-			// the Father; Kourend's altar has no equivalent quest gate.
-			// https://oldschool.runescape.wiki/w/Sherlock#Master_skill_challenges
-			if (client != null && Quest.SINS_OF_THE_FATHER.getState(client) == QuestState.FINISHED)
+			if (site.isAvailable(client))
 			{
-				altars.add(TRUE_BLOOD_ALTAR);
+				available.add(site.location);
 			}
-			return Collections.unmodifiableList(altars);
 		}
-		WorldPoint point = FIXED.get(key);
-		return point == null ? Collections.emptyList() : Collections.singletonList(point);
+		return Collections.unmodifiableList(available);
+	}
+
+	private static Site site(int x, int y, int plane, Quest... quests)
+	{
+		return site(x, y, plane, quests.length == 0 ? null
+			: client -> Arrays.stream(quests).allMatch(quest -> quest.getState(client) == QuestState.FINISHED));
+	}
+
+	private static Site site(int x, int y, int plane, Predicate<Client> access)
+	{
+		return new Site(new WorldPoint(x, y, plane), access);
+	}
+
+	private static final class Site
+	{
+		private final WorldPoint location;
+		private final Predicate<Client> access;
+
+		private Site(WorldPoint location, Predicate<Client> access)
+		{
+			this.location = location;
+			this.access = access;
+		}
+
+		private boolean isAvailable(Client client)
+		{
+			return access == null || client != null && access.test(client);
+		}
 	}
 }

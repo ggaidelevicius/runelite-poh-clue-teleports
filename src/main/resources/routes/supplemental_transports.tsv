@@ -1,0 +1,10 @@
+# Origin	Destination	menuOption menuTarget objectID	Quests	Varbits
+# Physical passages missing from the bundled base data, from the BSD-licensed Shortest Path table:
+# https://github.com/Skretzo/shortest-path/blob/375ce2c061df5c3961116dda6443f307df3223f1/src/main/resources/transports/transports.tsv#L5034-L5036
+1642 3222 0	1631 9632 0	Use Lift Platform 54524	The Heart of Darkness
+1631 9632 0	1642 3222 0	Use Lift Platform 54521	The Heart of Darkness
+# https://github.com/Skretzo/shortest-path/blob/375ce2c061df5c3961116dda6443f307df3223f1/src/main/resources/transports/transports.tsv#L5074-L5084
+1311 3102 0	1311 9430 2	Use Lift Platform 56650	The Final Dawn	16694=1
+1311 9430 2	1311 3102 0	Use Lift Platform 56647	The Final Dawn	16694=1
+1307 9420 1	1309 9420 2	Climb Rope 56713
+1309 9420 2	1307 9420 1	Climb Rope 56714

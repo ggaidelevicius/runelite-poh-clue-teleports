@@ -1,5 +1,6 @@
 package com.clueteleports;
 
+import com.clueteleports.routing.WalkingRouteResult;
 import com.google.gson.Gson;
 import java.awt.Graphics2D;
 import java.awt.Dimension;
@@ -12,6 +13,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -78,6 +80,7 @@ public class ClueTeleportsPluginTest
 	private boolean nexusOpen;
 	private int nexusReads;
 	private int tickCount;
+	private WorldPoint playerPosition;
 	private Tile[][][] sceneTiles;
 	private final Map<Integer, ObjectComposition> objectDefinitions = new HashMap<>();
 	private final Map<Integer, Widget> extraWidgets = new HashMap<>();
@@ -103,11 +106,13 @@ public class ClueTeleportsPluginTest
 	});
 	private final Player localPlayer = proxy(Player.class, (proxy, method, args) ->
 	{
-		if ("getLocalLocation".equals(method.getName()))
+		switch (method.getName())
 		{
-			return new LocalPoint(64, 64, 0);
+			case "getLocalLocation": return new LocalPoint(64, 64, 0);
+			case "getWorldView": return this.worldView;
+			case "getWorldLocation": return playerPosition;
+			default: throw new AssertionError("Unexpected player call: " + method.getName());
 		}
-		throw new AssertionError("Unexpected player call: " + method.getName());
 	});
 	private final WorldView worldView = proxy(WorldView.class, (proxy, method, args) ->
 	{
@@ -244,6 +249,76 @@ public class ClueTeleportsPluginTest
 		assertFalse(settings.chatRecommendations());
 		assertNotNull(renderOverlay());
 		assertTrue(chatMessages.isEmpty());
+	}
+
+	@Test
+	public void minimapArrowFollowsTheWalkAfterMatchingArrivalAndPausesAtManualPassages() throws Exception
+	{
+		WorldPoint landing = first.getLocation();
+		WorldPoint east = landing.dx(1);
+		WorldPoint turn = landing.dx(2);
+		WorldPoint door = turn.dy(1);
+		WorldPoint across = turn.dy(2);
+		WorldPoint goal = turn.dy(3);
+		setRecommendationPath(List.of(new WalkingRouteResult.Step(landing, false), new WalkingRouteResult.Step(east, false),
+			new WalkingRouteResult.Step(turn, false), new WalkingRouteResult.Step(door, true),
+			new WalkingRouteResult.Step(across, false), new WalkingRouteResult.Step(goal, false)));
+		enterOwnHouse();
+		assertNull(plugin.getMinimapWaypoint());
+		// A nearby landing is plausible, but the fixture cannot prove an off-path join.
+		leaveHouseAt(landing.dy(-1));
+		assertNull(plugin.getMinimapWaypoint());
+		playerPosition = landing;
+		tick();
+		assertEquals(turn, plugin.getMinimapWaypoint());
+		playerPosition = turn;
+		tick();
+		assertEquals(door, plugin.getMinimapWaypoint());
+		playerPosition = door;
+		tick();
+		assertNull(plugin.getMinimapWaypoint());
+		changeGameState(GameState.LOADING);
+		playerPosition = across;
+		changeGameState(GameState.LOGGED_IN);
+		tick();
+		assertEquals(goal, plugin.getMinimapWaypoint());
+		playerPosition = goal;
+		tick();
+		assertNull(plugin.getMinimapWaypoint());
+	}
+
+	@Test
+	public void wrongArrivalDoesNotArmTheArrowForLaterWalking() throws Exception
+	{
+		WorldPoint landing = first.getLocation();
+		setRecommendationPath(List.of(new WalkingRouteResult.Step(landing, false),
+			new WalkingRouteResult.Step(landing.dx(1), false)));
+		enterOwnHouse();
+		leaveHouseAt(second.getLocation());
+		assertNull(plugin.getMinimapWaypoint());
+		playerPosition = landing;
+		tick();
+		assertNull(plugin.getMinimapWaypoint());
+	}
+
+	private void setRecommendationPath(List<WalkingRouteResult.Step> steps) throws Exception
+	{
+		WorldPoint goal = steps.get(steps.size() - 1).getLocation();
+		setClue(new FixedLocationClue(goal));
+		setField(plugin, "routing", (TeleportRouting) (client, profile, targets, arrivals, radius) ->
+			TeleportRouting.Plan.found(first, goal, steps.size(), steps.size() - 1, 0, steps));
+	}
+
+	private void leaveHouseAt(WorldPoint position)
+	{
+		changeGameState(GameState.LOADING);
+		assertNull(plugin.getMinimapWaypoint());
+		tick();
+		playerPosition = position;
+		baseX = position.getX() & ~63;
+		baseY = position.getY() & ~63;
+		changeGameState(GameState.LOGGED_IN);
+		tick();
 	}
 
 	@Test

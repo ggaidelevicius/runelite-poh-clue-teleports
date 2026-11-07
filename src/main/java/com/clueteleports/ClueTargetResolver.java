@@ -8,6 +8,7 @@ import java.util.Set;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.cluescrolls.ClueScrollPlugin;
 import net.runelite.client.plugins.cluescrolls.clues.ClueScroll;
+import net.runelite.client.plugins.cluescrolls.clues.CrypticClue;
 import net.runelite.client.plugins.cluescrolls.clues.FaloTheBardClue;
 import net.runelite.client.plugins.cluescrolls.clues.LocationClueScroll;
 import net.runelite.client.plugins.cluescrolls.clues.LocationsClueScroll;
@@ -73,6 +74,11 @@ public final class ClueTargetResolver
 					uniqueLocations.add(location);
 				}
 			}
+		}
+		if (uniqueLocations.isEmpty() && clue instanceof CrypticClue)
+		{
+			WorldPoint combatLocation = CrypticCombatLocations.forClue((CrypticClue) clue);
+			if (combatLocation != null) uniqueLocations.add(combatLocation);
 		}
 
 		List<WorldPoint> targets = new ArrayList<>(uniqueLocations);

@@ -26,6 +26,7 @@ import net.runelite.client.ui.overlay.OverlayMenuEntry;
 import net.runelite.client.ui.overlay.components.LayoutableRenderableEntity;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
+import net.runelite.client.util.Text;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -67,7 +68,9 @@ public class ClueTeleportsOverlayTest
 		assertTrue(children.get(0) instanceof TitleComponent);
 		assertEquals("POH clue teleport", field(children.get(0), "text"));
 		assertEquals("Portal nexus", field(children.get(1), "left"));
+		assertEquals(Color.WHITE, field(children.get(1), "leftColor"));
 		assertEquals("Catherby", field(children.get(2), "left"));
+		assertEquals(Color.LIGHT_GRAY, field(children.get(2), "leftColor"));
 		assertEquals("~13s running, 42 walking tiles", field(children.get(3), "left"));
 	}
 
@@ -80,7 +83,7 @@ public class ClueTeleportsOverlayTest
 		List<LayoutableRenderableEntity> children = renderComponents(overlay);
 		assertEquals(1, children.size());
 		assertTrue(children.get(0) instanceof LineComponent);
-		assertEquals("Fairy ring: BKR - Mort Myre Swamp, south of Canifis", field(children.get(0), "left"));
+		assertEquals("Fairy ring: <col=c0c0c0>BKR - Mort Myre Swamp, south of Canifis", field(children.get(0), "left"));
 		assertTrue(renderOnce(overlay).width <= 300);
 		BufferedImage preview = new BufferedImage(320, 160, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D graphics = preview.createGraphics();
@@ -88,11 +91,28 @@ public class ClueTeleportsOverlayTest
 		{
 			graphics.setFont(FontManager.getRunescapeFont());
 			Dimension size = overlay.render(graphics);
+			assertTrue("Facility and colon are white", containsColor(preview, Color.WHITE));
+			assertTrue("Destination and code are grey", containsColor(preview, Color.LIGHT_GRAY));
 			Files.createDirectories(Path.of("build"));
 			assertTrue(ImageIO.write(preview.getSubimage(0, 0, size.width, size.height), "png",
 				new File("build/compact-recommendation-preview.png")));
 		}
 		finally { graphics.dispose(); }
+	}
+
+	@Test
+	public void compactDestinationRemainsGreyWhenItWraps() throws Exception
+	{
+		String destination = "BKR - Mort Myre Swamp, south of Canifis near the entrance to the path through the swamp";
+		ClueTeleportsOverlay overlay = overlayFor(ClueTeleportsOverlay.Display.recommendation("Fairy ring", destination, "42 tiles"),
+			new MutableConfig(ClueTeleportsConfig.OverlayMode.COMPACT));
+		List<LayoutableRenderableEntity> children = renderComponents(overlay);
+		assertEquals(2, children.size());
+		String firstLine = (String) field(children.get(0), "left");
+		assertTrue(firstLine.startsWith("Fairy ring: <col=c0c0c0>BKR"));
+		assertEquals("Fairy ring: " + destination, Text.removeTags(firstLine) + " " + field(children.get(1), "left"));
+		assertEquals(Color.LIGHT_GRAY, field(children.get(1), "leftColor"));
+		assertEquals(300, renderOnce(overlay).width);
 	}
 
 	@Test
@@ -174,7 +194,7 @@ public class ClueTeleportsOverlayTest
 		assertEquals(4, renderComponents(overlay).size());
 		config.mode = ClueTeleportsConfig.OverlayMode.COMPACT;
 		assertEquals(1, renderComponents(overlay).size());
-		assertEquals("Portal nexus: Catherby", field(overlay.getPanelComponent().getChildren().get(0), "left"));
+		assertEquals("Portal nexus: <col=c0c0c0>Catherby", field(overlay.getPanelComponent().getChildren().get(0), "left"));
 		assertTrue(renderOnce(overlay).height < fullSize.height);
 		config.mode = ClueTeleportsConfig.OverlayMode.HIDDEN;
 		assertNull(renderOnce(overlay));
