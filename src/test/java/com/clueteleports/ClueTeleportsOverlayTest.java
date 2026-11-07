@@ -55,6 +55,136 @@ public class ClueTeleportsOverlayTest
 	}
 
 	@Test
+	public void defaultSettingsKeepTheFullRecommendationAndDoNotSendChat() throws Exception
+	{
+		ClueTeleportsConfig config = new ClueTeleportsConfig() { };
+		assertEquals(ClueTeleportsConfig.OverlayMode.FULL, config.overlayMode());
+		assertFalse(config.chatRecommendations());
+		ClueTeleportsOverlay overlay = overlayFor(ClueTeleportsOverlay.Display.recommendation(
+			"Portal nexus", "Catherby", "~13s running, 42 walking tiles"), config);
+		List<LayoutableRenderableEntity> children = renderComponents(overlay);
+		assertEquals(4, children.size());
+		assertTrue(children.get(0) instanceof TitleComponent);
+		assertEquals("POH clue teleport", field(children.get(0), "text"));
+		assertEquals("Portal nexus", field(children.get(1), "left"));
+		assertEquals("Catherby", field(children.get(2), "left"));
+		assertEquals("~13s running, 42 walking tiles", field(children.get(3), "left"));
+	}
+
+	@Test
+	public void compactRecommendationShowsOnlyTheFacilityAndDestinationIncludingFairyCode() throws Exception
+	{
+		MutableConfig config = new MutableConfig(ClueTeleportsConfig.OverlayMode.COMPACT);
+		ClueTeleportsOverlay overlay = overlayFor(ClueTeleportsOverlay.Display.recommendation(
+			"Fairy ring", "BKR - Mort Myre Swamp, south of Canifis", "~13s running, 42 walking tiles"), config);
+		List<LayoutableRenderableEntity> children = renderComponents(overlay);
+		assertEquals(1, children.size());
+		assertTrue(children.get(0) instanceof LineComponent);
+		assertEquals("Fairy ring: BKR - Mort Myre Swamp, south of Canifis", field(children.get(0), "left"));
+		assertTrue(renderOnce(overlay).width <= 300);
+		BufferedImage preview = new BufferedImage(320, 160, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D graphics = preview.createGraphics();
+		try
+		{
+			graphics.setFont(FontManager.getRunescapeFont());
+			Dimension size = overlay.render(graphics);
+			Files.createDirectories(Path.of("build"));
+			assertTrue(ImageIO.write(preview.getSubimage(0, 0, size.width, size.height), "png",
+				new File("build/compact-recommendation-preview.png")));
+		}
+		finally { graphics.dispose(); }
+	}
+
+	@Test
+	public void compactStatusShowsTheStatusWithoutTreatingItsHintAsADestination() throws Exception
+	{
+		MutableConfig config = new MutableConfig(ClueTeleportsConfig.OverlayMode.COMPACT);
+		ClueTeleportsOverlay overlay = overlayFor(new ClueTeleportsOverlay.Display(
+			"No mapped walking route", "Known paths do not reach this clue", null), config);
+		List<LayoutableRenderableEntity> children = renderComponents(overlay);
+		assertEquals(1, children.size());
+		assertEquals("No mapped walking route", field(children.get(0), "left"));
+	}
+
+	@Test
+	public void initialHouseSetupRemainsVisibleInCompactAndHiddenModes() throws Exception
+	{
+		ClueTeleportsOverlay.Display display = ClueTeleportsOverlay.Display.setup(
+			"Visit your POH", "Enter via Home or Teleport to House");
+		assertTrue(display.isSetup());
+		assertFalse(display.isLearning());
+		for (ClueTeleportsConfig.OverlayMode mode : List.of(
+			ClueTeleportsConfig.OverlayMode.COMPACT, ClueTeleportsConfig.OverlayMode.HIDDEN))
+		{
+			List<LayoutableRenderableEntity> children = renderComponents(overlayFor(display, new MutableConfig(mode)));
+			assertEquals(3, children.size());
+			assertTrue(children.get(0) instanceof TitleComponent);
+			assertEquals("Visit your POH", field(children.get(1), "left"));
+			assertEquals("Enter via Home or Teleport to House", field(children.get(2), "left"));
+		}
+	}
+
+	@Test
+	public void learningChecklistRemainsCompleteInCompactAndHiddenModes() throws Exception
+	{
+		ClueTeleportsOverlay.Display display = ClueTeleportsOverlay.Display.learning(
+			Map.of(TeleportSource.FAIRY_RING, Collections.emptySet()), FOUR, HINT);
+		assertTrue(display.isSetup());
+		for (ClueTeleportsConfig.OverlayMode mode : List.of(
+			ClueTeleportsConfig.OverlayMode.COMPACT, ClueTeleportsConfig.OverlayMode.HIDDEN))
+		{
+			List<LayoutableRenderableEntity> children = renderComponents(overlayFor(display, new MutableConfig(mode)));
+			assertEquals(FOUR.size() + 2, children.size());
+			assertEquals("Learn POH teleports (1/4)", field(children.get(0), "text"));
+			assertEquals(HINT, field(children.get(1), "left"));
+			assertEquals("Learned", field(children.get(2), "right"));
+			assertEquals("Not learned", field(children.get(3), "right"));
+		}
+	}
+
+	@Test
+	public void hiddenModeStopsDrawingAfterLearningCompletes()
+	{
+		ClueTeleportsOverlay.Display[] current = {
+			ClueTeleportsOverlay.Display.learning(Collections.emptyMap(), FOUR, HINT)
+		};
+		ClueTeleportsPlugin plugin = new ClueTeleportsPlugin()
+		{
+			@Override
+			ClueTeleportsOverlay.Display getDisplay()
+			{
+				return current[0];
+			}
+		};
+		ClueTeleportsOverlay overlay = new ClueTeleportsOverlay(plugin,
+			new MutableConfig(ClueTeleportsConfig.OverlayMode.HIDDEN));
+		assertEquals(FOUR.size() + 2, renderComponents(overlay).size());
+		current[0] = ClueTeleportsOverlay.Display.recommendation("Portal nexus", "Catherby", "42 walking tiles");
+		assertNull(renderOnce(overlay));
+		assertTrue(overlay.getPanelComponent().getChildren().isEmpty());
+	}
+
+	@Test
+	public void changingOverlayModeUpdatesTheExistingOverlay() throws Exception
+	{
+		MutableConfig config = new MutableConfig(ClueTeleportsConfig.OverlayMode.FULL);
+		ClueTeleportsOverlay overlay = overlayFor(ClueTeleportsOverlay.Display.recommendation(
+			"Portal nexus", "Catherby", "42 walking tiles"), config);
+		Dimension fullSize = renderOnce(overlay);
+		assertEquals(4, renderComponents(overlay).size());
+		config.mode = ClueTeleportsConfig.OverlayMode.COMPACT;
+		assertEquals(1, renderComponents(overlay).size());
+		assertEquals("Portal nexus: Catherby", field(overlay.getPanelComponent().getChildren().get(0), "left"));
+		assertTrue(renderOnce(overlay).height < fullSize.height);
+		config.mode = ClueTeleportsConfig.OverlayMode.HIDDEN;
+		assertNull(renderOnce(overlay));
+		assertTrue(overlay.getPanelComponent().getChildren().isEmpty());
+		config.mode = ClueTeleportsConfig.OverlayMode.FULL;
+		assertEquals(4, renderComponents(overlay).size());
+		assertEquals(fullSize, renderOnce(overlay));
+	}
+
+	@Test
 	public void fourDetectedFacilitiesShowTheirUnlearnedMenus() throws Exception
 	{
 		ClueTeleportsOverlay.Display display = ClueTeleportsOverlay.Display.learning(Collections.emptyMap(), FOUR, HINT);
@@ -288,6 +418,11 @@ public class ClueTeleportsOverlayTest
 
 	private ClueTeleportsOverlay overlayFor(ClueTeleportsOverlay.Display display)
 	{
+		return overlayFor(display, new ClueTeleportsConfig() { });
+	}
+
+	private ClueTeleportsOverlay overlayFor(ClueTeleportsOverlay.Display display, ClueTeleportsConfig config)
+	{
 		return new ClueTeleportsOverlay(new ClueTeleportsPlugin()
 		{
 			@Override
@@ -295,7 +430,41 @@ public class ClueTeleportsOverlayTest
 			{
 				return display;
 			}
-		});
+		}, config);
+	}
+
+	private List<LayoutableRenderableEntity> renderComponents(ClueTeleportsOverlay overlay)
+	{
+		overlay.setClearChildren(false);
+		assertNotNull(renderOnce(overlay));
+		return new ArrayList<>(overlay.getPanelComponent().getChildren());
+	}
+
+	private Dimension renderOnce(ClueTeleportsOverlay overlay)
+	{
+		Graphics2D graphics = new BufferedImage(320, 240, BufferedImage.TYPE_INT_ARGB).createGraphics();
+		try
+		{
+			graphics.setFont(FontManager.getRunescapeFont());
+			return overlay.render(graphics);
+		}
+		finally { graphics.dispose(); }
+	}
+
+	private static final class MutableConfig implements ClueTeleportsConfig
+	{
+		private OverlayMode mode;
+
+		private MutableConfig(OverlayMode mode)
+		{
+			this.mode = mode;
+		}
+
+		@Override
+		public OverlayMode overlayMode()
+		{
+			return mode;
+		}
 	}
 
 	private static Object field(Object instance, String name) throws Exception

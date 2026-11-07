@@ -23,12 +23,19 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 	private static final Color LEARNED_COLOR = new Color(126, 215, 137);
 	private static final Color NOT_LEARNED_COLOR = new Color(255, 196, 93);
 	private final ClueTeleportsPlugin plugin;
+	private final ClueTeleportsConfig config;
+
+	ClueTeleportsOverlay(ClueTeleportsPlugin plugin)
+	{
+		this(plugin, new ClueTeleportsConfig() { });
+	}
 
 	@Inject
-	ClueTeleportsOverlay(ClueTeleportsPlugin plugin)
+	ClueTeleportsOverlay(ClueTeleportsPlugin plugin, ClueTeleportsConfig config)
 	{
 		super(plugin);
 		this.plugin = plugin;
+		this.config = Objects.requireNonNull(config, "config");
 		setPosition(OverlayPosition.TOP_LEFT);
 		setResizable(false);
 		addMenuEntry(MenuAction.RUNELITE_OVERLAY, "Forget learned sources", "POH Clue Teleports",
@@ -39,14 +46,24 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 	public Dimension render(Graphics2D graphics)
 	{
 		Display display = plugin.getDisplay();
+		panelComponent.getChildren().clear();
 		if (display == null)
 		{
 			return null;
 		}
-		panelComponent.getChildren().clear();
+		ClueTeleportsConfig.OverlayMode mode = display.isSetup() ? ClueTeleportsConfig.OverlayMode.FULL : config.overlayMode();
+		if (mode == ClueTeleportsConfig.OverlayMode.HIDDEN)
+		{
+			return null;
+		}
+		String compact = mode == ClueTeleportsConfig.OverlayMode.COMPACT ? display.compactText() : null;
 		setPreferredSize(null);
-		panelComponent.setPreferredSize(new Dimension(contentWidth(graphics.getFontMetrics(), display), 0));
-		if (display.isLearning())
+		panelComponent.setPreferredSize(new Dimension(contentWidth(graphics.getFontMetrics(), display, compact), 0));
+		if (compact != null)
+		{
+			panelComponent.getChildren().add(LineComponent.builder().left(compact).build());
+		}
+		else if (display.isLearning())
 		{
 			panelComponent.getChildren().add(TitleComponent.builder().text(display.first).color(Color.CYAN).build());
 			panelComponent.getChildren().add(LineComponent.builder().left(display.second).leftColor(Color.LIGHT_GRAY).build());
@@ -83,8 +100,12 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 	}
 
 
-	private static int contentWidth(FontMetrics metrics, Display display)
+	private static int contentWidth(FontMetrics metrics, Display display, String compact)
 	{
+		if (compact != null)
+		{
+			return boundedWidth(textWidth(metrics, compact));
+		}
 		int width = textWidth(metrics, display.isLearning() ? display.first : "POH clue teleport");
 		width = Math.max(width, textWidth(metrics, display.first));
 		width = Math.max(width, textWidth(metrics, display.second));
@@ -94,6 +115,11 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 			String status = display.getLearnedSources().contains(source) ? "Learned" : "Not learned";
 			width = Math.max(width, textWidth(metrics, source.getDisplayName()) + 12 + textWidth(metrics, status));
 		}
+		return boundedWidth(width);
+	}
+
+	private static int boundedWidth(int width)
+	{
 		return Math.max(100, Math.min(300, width + 2 * ComponentConstants.STANDARD_BORDER));
 	}
 
@@ -107,21 +133,36 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 		final String first;
 		final String second;
 		final String third;
+		private final boolean setup;
+		private final boolean recommendation;
 		private final Set<TeleportSource> learnedSources;
 		private final Set<TeleportSource> requiredSources;
 
 		Display(String first, String second, String third)
 		{
-			this(first, second, third, null, Collections.emptySet());
+			this(first, second, third, false, false, null, Collections.emptySet());
 		}
 
-		private Display(String first, String second, String third, Set<TeleportSource> learnedSources, Set<TeleportSource> requiredSources)
+		private Display(String first, String second, String third, boolean setup, boolean recommendation,
+			Set<TeleportSource> learnedSources, Set<TeleportSource> requiredSources)
 		{
 			this.first = first;
 			this.second = second;
 			this.third = third;
+			this.setup = setup;
+			this.recommendation = recommendation;
 			this.learnedSources = learnedSources;
 			this.requiredSources = requiredSources;
+		}
+
+		static Display setup(String first, String second)
+		{
+			return new Display(first, second, null, true, false, null, Collections.emptySet());
+		}
+
+		static Display recommendation(String source, String destination, String details)
+		{
+			return new Display(source, destination, details, false, true, null, Collections.emptySet());
 		}
 
 		static Display learning(Map<TeleportSource, Set<String>> snapshots, Set<TeleportSource> required, String hint)
@@ -133,10 +174,18 @@ public final class ClueTeleportsOverlay extends OverlayPanel
 			Set<TeleportSource> copied = EnumSet.noneOf(TeleportSource.class);
 			copied.addAll(required);
 			return new Display("Learn POH teleports (" + learned.size() + "/" + required.size() + ")",
-				Objects.requireNonNull(hint, "hint"), null, Collections.unmodifiableSet(learned), Collections.unmodifiableSet(copied));
+				Objects.requireNonNull(hint, "hint"), null, true, false,
+				Collections.unmodifiableSet(learned), Collections.unmodifiableSet(copied));
 		}
 
 		Set<TeleportSource> getRequiredSources() { return requiredSources; }
+
+		boolean isSetup() { return setup; }
+
+		private String compactText()
+		{
+			return recommendation ? first + ": " + second : first;
+		}
 
 		boolean isLearning()
 		{

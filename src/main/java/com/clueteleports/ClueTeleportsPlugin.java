@@ -1,5 +1,6 @@
 package com.clueteleports;
 
+import com.google.inject.Provides;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -9,8 +10,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
@@ -20,6 +23,8 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -27,6 +32,7 @@ import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.cluescrolls.ClueScrollPlugin;
+import net.runelite.client.plugins.cluescrolls.clues.ClueScroll;
 import net.runelite.client.ui.overlay.OverlayManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,12 +51,15 @@ public class ClueTeleportsPlugin extends Plugin
 	@Inject private Client client;
 	@Inject private ClientThread clientThread;
 	@Inject private ConfigManager configManager;
+	@Inject private ClueTeleportsConfig config;
+	@Inject private ChatMessageManager chatMessageManager;
 	@Inject private PluginManager pluginManager;
 	@Inject private OverlayManager overlayManager;
 	@Inject private ClueTeleportsOverlay overlay;
 	private final ClueTargetResolver targetResolver = new ClueTargetResolver();
 	private final FairyRingTravelLog fairyTravelLog = new FairyRingTravelLog();
 	private final NexusMenuScroll nexusMenuScroll = new NexusMenuScroll();
+	private final RecommendationMessages recommendationMessages = new RecommendationMessages();
 	private TeleportRouting routing;
 	private final HouseContext houseContext = new HouseContext();
 	private final MenuObservations observations = new MenuObservations();
@@ -67,6 +76,12 @@ public class ClueTeleportsPlugin extends Plugin
 	private volatile boolean running;
 	private String profileKey;
 	private String learningHint = "Enter via Home or Teleport to House";
+
+	@Provides
+	ClueTeleportsConfig provideConfig(ConfigManager manager)
+	{
+		return manager.getConfig(ClueTeleportsConfig.class);
+	}
 
 	@Override
 	protected void startUp()
@@ -89,6 +104,7 @@ public class ClueTeleportsPlugin extends Plugin
 	protected void shutDown()
 	{
 		running = false;
+		recommendationMessages.reset();
 		if (routing != null) routing.close();
 		routing = null;
 		clearGuidance();
@@ -119,6 +135,15 @@ public class ClueTeleportsPlugin extends Plugin
 		if (running)
 		{
 			houseContext.onMenuOptionClicked(event, client);
+		}
+	}
+
+	@Subscribe
+	public void onCommandExecuted(CommandExecuted event)
+	{
+		if (running && "pohcluereset".equalsIgnoreCase(event.getCommand()) && event.getArguments().length == 0)
+		{
+			forgetAvailability();
 		}
 	}
 
@@ -172,6 +197,10 @@ public class ClueTeleportsPlugin extends Plugin
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		houseContext.onGameStateChanged(event.getGameState());
+		if (event.getGameState() == GameState.LOGIN_SCREEN)
+		{
+			recommendationMessages.reset();
+		}
 		if (event.getGameState() != GameState.LOGGED_IN)
 		{
 			invalidateRoute();
@@ -251,7 +280,9 @@ public class ClueTeleportsPlugin extends Plugin
 		ClueScrollPlugin clues = pluginManager.getPlugins().stream()
 			.filter(ClueScrollPlugin.class::isInstance).map(ClueScrollPlugin.class::cast)
 			.filter(pluginManager::isPluginEnabled).findFirst().orElse(null);
-		ClueTargetResolver.Resolution target = targetResolver.resolve(clues);
+		ClueScroll clue = clues == null ? null : clues.getClue();
+		ClueTargetResolver.Resolution target = targetResolver.resolve(clue, clues);
+		recommendationMessages.update(profileKey, clue, target, null, config.chatRecommendations());
 		Map<TeleportSource, Set<String>> learned = availability.snapshot();
 		Set<TeleportSource> required = houseInventory.requiredMenus();
 		Set<TeleportSource> pending = EnumSet.noneOf(TeleportSource.class);
@@ -268,8 +299,8 @@ public class ClueTeleportsPlugin extends Plugin
 		if (!houseInventory.isSurveyed())
 		{
 			invalidateRoute();
-			display = new ClueTeleportsOverlay.Display(ownHouse ? "Checking POH facilities" : "Visit your POH",
-				ownHouse ? "Wait for the house to finish loading" : "Enter via Home or Teleport to House", null);
+			display = ClueTeleportsOverlay.Display.setup(ownHouse ? "Checking POH facilities" : "Visit your POH",
+				ownHouse ? "Wait for the house to finish loading" : "Enter via Home or Teleport to House");
 			return;
 		}
 		if (!pending.isEmpty())
@@ -312,8 +343,11 @@ public class ClueTeleportsPlugin extends Plugin
 				{
 					guidance = new HouseLearningOverlay.Guidance(ownHouse, pending,
 						route.destination.getSource(), route.destination.getId());
-					display = new ClueTeleportsOverlay.Display(route.destination.getSource().getDisplayName(),
+					display = ClueTeleportsOverlay.Display.recommendation(route.destination.getSource().getDisplayName(),
 						route.destination.getName(), describeRoute(route));
+					String message = recommendationMessages.update(profileKey, clue, target, route.destination,
+						config.chatRecommendations());
+					if (message != null) sendLocalMessage(message);
 				}
 				else display = routeStatus(route.status);
 				break;
@@ -324,6 +358,11 @@ public class ClueTeleportsPlugin extends Plugin
 	private void invalidateRoute()
 	{
 		if (routing != null) routing.invalidate();
+	}
+
+	private void sendLocalMessage(String message)
+	{
+		chatMessageManager.queue(QueuedMessage.builder().type(ChatMessageType.CONSOLE).value(message).build());
 	}
 
 	private static String describeRoute(TeleportRouting.Plan route)
@@ -514,12 +553,15 @@ public class ClueTeleportsPlugin extends Plugin
 				configManager.unsetRSProfileConfiguration(CONFIG_GROUP, source.getCacheKey() + "Fixtures");
 			}
 			configManager.unsetRSProfileConfiguration(CONFIG_GROUP, HOUSE_INVENTORY_KEY);
+			availability = new AvailabilityCache();
 			houseInventory = new HouseInventory();
+			recommendationMessages.reset();
 			observations.clear();
 			nativeMenus.clear();
 			pendingFixtures.clear();
 			pendingInventory = null;
 			refresh(false);
+			sendLocalMessage("[POH Clue Teleports] Forgot learned sources for this character. Visit your POH to learn them again.");
 		});
 	}
 

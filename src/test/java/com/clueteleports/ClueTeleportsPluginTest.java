@@ -2,17 +2,22 @@ package com.clueteleports;
 
 import com.google.gson.Gson;
 import java.awt.Graphics2D;
+import java.awt.Dimension;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import net.runelite.api.Client;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.GameState;
 import net.runelite.api.MenuAction;
@@ -28,6 +33,7 @@ import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptPostFired;
@@ -38,6 +44,8 @@ import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
@@ -169,16 +177,27 @@ public class ClueTeleportsPluginTest
 	private final ClueScrollPlugin coreClues = new ClueScrollPlugin();
 	private final ClientThread clientThread = new ClientThread();
 	private ConfigManager config;
+	private ClueTeleportsConfig settings;
+	private Queue<QueuedMessage> chatMessages;
 	private PluginManager pluginManager;
 	private TeleportDestination first;
 	private TeleportDestination second;
 
 	@Before
+	@SuppressWarnings("unchecked")
 	public void setUp() throws Exception
 	{
 		EventBus events = new EventBus();
 		events.register(writes);
 		config = createInMemoryConfig(events);
+		settings = plugin.provideConfig(config);
+		setField(clientThread, "client", client);
+		Constructor<?> chatConstructor = ChatMessageManager.class.getDeclaredConstructors()[0];
+		chatConstructor.setAccessible(true);
+		ChatMessageManager chat = (ChatMessageManager) chatConstructor.newInstance(client, null, clientThread, events);
+		Field messagesField = ChatMessageManager.class.getDeclaredField("queuedMessages");
+		messagesField.setAccessible(true);
+		chatMessages = (Queue<QueuedMessage>) messagesField.get(chat);
 		setField(config, "rsProfileKey", "character-one");
 		Constructor<?> constructor = PluginManager.class.getDeclaredConstructors()[0];
 		constructor.setAccessible(true);
@@ -187,6 +206,8 @@ public class ClueTeleportsPluginTest
 		setField(plugin, "client", client);
 		setField(plugin, "clientThread", clientThread);
 		setField(plugin, "configManager", config);
+		setField(plugin, "config", settings);
+		setField(plugin, "chatMessageManager", chat);
 		setField(plugin, "pluginManager", pluginManager);
 		setField(plugin, "running", true);
 		setField(plugin, "routing", new FixtureRouting());
@@ -213,6 +234,159 @@ public class ClueTeleportsPluginTest
 		pluginManager.remove(coreClues);
 		tick();
 		assertNull(plugin.getDisplay());
+	}
+
+	@Test
+	public void defaultConfigurationKeepsTheCurrentOverlayAndChatSilent()
+	{
+		tick();
+		assertEquals(ClueTeleportsConfig.OverlayMode.FULL, settings.overlayMode());
+		assertFalse(settings.chatRecommendations());
+		assertNotNull(renderOverlay());
+		assertTrue(chatMessages.isEmpty());
+	}
+
+	@Test
+	public void hiddenRecommendationsKeepLearningAndMenuGuidanceWorking()
+	{
+		config.setConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, "overlayMode", "HIDDEN");
+		config.setConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, "chatRecommendations", true);
+		clearNexusCache();
+		enterOwnHouse();
+		assertTrue(plugin.getDisplay().isLearning());
+		assertNotNull(renderOverlay());
+		assertTrue(chatMessages.isEmpty());
+		openNexus(first);
+		tick();
+		assertNotNull(renderOverlay());
+		tick();
+		assertEquals(Set.of(first.getId()), cachedNexusIds());
+		assertFalse(plugin.getDisplay().isSetup());
+		assertNull(renderOverlay());
+		assertTrue(plugin.getGuidance().isOwnHouse());
+		assertEquals(first.getSource(), plugin.getGuidance().getSource());
+		assertEquals(first.getId(), plugin.getGuidance().getDestinationId());
+		tick();
+		tick();
+		assertEquals(1, chatMessages.size());
+		QueuedMessage message = chatMessages.peek();
+		assertEquals(ChatMessageType.CONSOLE, message.getType());
+		assertEquals("[POH Clue Teleports] Portal nexus: Varrock", message.getValue());
+	}
+
+	@Test
+	public void hiddenModeShowsTheInitialHouseVisitPrompt()
+	{
+		config.setConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, "overlayMode", "HIDDEN");
+		config.unsetRSProfileConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, ClueTeleportsPlugin.HOUSE_INVENTORY_KEY);
+		tick();
+		assertEquals("Visit your POH", plugin.getDisplay().first);
+		assertTrue(plugin.getDisplay().isSetup());
+		assertNotNull(renderOverlay());
+	}
+
+	@Test
+	public void chatDoesNotRepeatDuringLoadingHopsOrRouteRecalculation() throws Exception
+	{
+		config.setConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, "chatRecommendations", true);
+		tick();
+		assertEquals(1, chatMessages.size());
+		changeGameState(GameState.LOADING);
+		tick();
+		changeGameState(GameState.LOGGED_IN);
+		tick();
+		changeGameState(GameState.HOPPING);
+		tick();
+		changeGameState(GameState.LOGGED_IN);
+		tick();
+		setField(plugin, "routing", (TeleportRouting) (client, profile, targets, arrivals, radius) ->
+			TeleportRouting.Plan.status(TeleportRouting.Plan.Status.SEARCHING));
+		tick();
+		setField(plugin, "routing", (TeleportRouting) (client, profile, targets, arrivals, radius) ->
+			TeleportRouting.Plan.found(first, targets.get(0), 50, 50, 0));
+		tick();
+		assertEquals(1, chatMessages.size());
+		setField(plugin, "routing", new FixtureRouting());
+		seedCache(second);
+		tick();
+		assertEquals(2, chatMessages.size());
+	}
+
+	@Test
+	public void chatAnnouncesNewStepsUsingTheSameTeleportAndCanBeEnabledDuringAClue() throws Exception
+	{
+		tick();
+		assertTrue(chatMessages.isEmpty());
+		config.setConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, "chatRecommendations", true);
+		tick();
+		assertEquals(1, chatMessages.size());
+		WorldPoint next = new WorldPoint(first.getLocation().getX() + 1, first.getLocation().getY(), 0);
+		setClue(new FixedLocationClue(next));
+		tick();
+		assertEquals(2, chatMessages.size());
+		setClue(new FixedLocationClue(next));
+		tick();
+		assertEquals(2, chatMessages.size());
+		setClue(null);
+		tick();
+		setClue(new FixedLocationClue(next));
+		tick();
+		assertEquals(3, chatMessages.size());
+	}
+
+	@Test
+	public void localResetWorksWhileHiddenAndRelearningShowsTheFullSetup() throws Exception
+	{
+		config.setConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, "overlayMode", "HIDDEN");
+		setField(config, "rsProfileKey", "character-two");
+		seedOtherSourcesEmpty();
+		seedCache(second);
+		setField(config, "rsProfileKey", "character-one");
+		tick();
+		assertNull(renderOverlay());
+		plugin.onCommandExecuted(new CommandExecuted("pohcluereset", new String[0]));
+		runClientTasks();
+		for (TeleportSource source : TeleportSource.values())
+		{
+			assertNull(cachedSource(source));
+		}
+		assertNull(config.getRSProfileConfiguration(ClueTeleportsPlugin.CONFIG_GROUP, ClueTeleportsPlugin.HOUSE_INVENTORY_KEY));
+		assertEquals(ClueTeleportsConfig.OverlayMode.HIDDEN, settings.overlayMode());
+		assertFalse(settings.chatRecommendations());
+		assertTrue(plugin.getDisplay().isSetup());
+		assertNotNull(renderOverlay());
+		assertEquals(1, chatMessages.size());
+		assertTrue(chatMessages.peek().getValue().contains("Forgot learned sources for this character"));
+		setField(config, "rsProfileKey", "character-two");
+		assertEquals(Set.of(second.getId()), cachedNexusIds());
+		setField(config, "rsProfileKey", "character-one");
+		placeFixture(ObjectID.POH_NEXUS_PORTAL_1, "Portal nexus");
+		enterOwnHouse();
+		tick();
+		assertTrue(plugin.getDisplay().isLearning());
+		assertEquals(Set.of(TeleportSource.PORTAL_NEXUS), plugin.getDisplay().getRequiredSources());
+		assertNotNull(renderOverlay());
+		openNexus(first);
+		tick();
+		tick();
+		assertEquals(Set.of(first.getId()), cachedNexusIds());
+		assertEquals(first.getId(), plugin.getGuidance().getDestinationId());
+		assertNull(renderOverlay());
+	}
+
+	@Test
+	public void queuedResetCannotForgetADifferentCharacter() throws Exception
+	{
+		tick();
+		plugin.onCommandExecuted(new CommandExecuted("pohcluereset", new String[0]));
+		setField(config, "rsProfileKey", "character-two");
+		seedOtherSourcesEmpty();
+		seedCache(second);
+		runClientTasks();
+		assertEquals(Set.of(second.getId()), cachedNexusIds());
+		assertTrue(chatMessages.isEmpty());
+		setField(config, "rsProfileKey", "character-one");
+		assertEquals(Set.of(first.getId()), cachedNexusIds());
 	}
 
 	@Test
@@ -1034,6 +1208,23 @@ public class ClueTeleportsPluginTest
 	{
 		tickCount++;
 		plugin.onGameTick(new GameTick());
+	}
+
+	private Dimension renderOverlay()
+	{
+		Graphics2D graphics = new BufferedImage(320, 240, BufferedImage.TYPE_INT_ARGB).createGraphics();
+		try
+		{
+			return new ClueTeleportsOverlay(plugin, settings).render(graphics);
+		}
+		finally { graphics.dispose(); }
+	}
+
+	private void runClientTasks() throws Exception
+	{
+		Method invoke = ClientThread.class.getDeclaredMethod("invoke");
+		invoke.setAccessible(true);
+		invoke.invoke(clientThread);
 	}
 
 	private void setClue(ClueScroll clue) throws Exception

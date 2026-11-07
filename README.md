@@ -1,6 +1,6 @@
 # POH Clue Teleports
 
-A RuneLite companion plugin that keeps one POH teleport recommendation visible for the active clue. It uses the official **Clue Scroll** plugin's current target and updates as the clue changes.
+A RuneLite companion plugin that recommends one POH teleport for the active clue. It uses the official **Clue Scroll** plugin's current target and updates as the clue changes.
 
 It compares travel available through fixtures in your own player-owned house. Once the menus for detected facilities have been learned, the overlay identifies the best available POH destination or fairy ring code and shows estimated running time and walking tiles to the clue. Inventory items, standalone spellbook teleports, and travel facilities outside the POH are outside the plugin's scope.
 
@@ -45,7 +45,19 @@ A learned source with no available destinations still counts as learned. The che
 
 House ownership is confirmed by an explicit own-house entry action followed by loading an actual POH region. Use the portal's **Home** option or **Teleport to House** after enabling the plugin; house tablets and construction cape POH teleports are supported too. No welcome chat message is required. Guest-house entry actions invalidate that confirmation. If you enable the plugin while already inside your house, leave and re-enter through one of these actions before learning menus. Opening a network outside your POH does not establish that you own its POH facility.
 
-The cache represents the last observed menu or fixture. Removing an entire facility or room, or rebuilding the house layout, can leave old fixture arrivals cached because an unloaded room does not establish that something was removed. After those changes, right-click the overlay and choose **Forget learned sources**, then re-enter your house, open the detected travel menus, and walk through the other travel rooms. The same action can reset stale data after a game update. Renaming the plugin preserves the original per-character caches.
+The cache represents the last observed menu or fixture. Removing an entire facility or room, or rebuilding the house layout, can leave old fixture arrivals cached because an unloaded room does not establish that something was removed. After those changes, right-click the overlay and choose **Forget learned sources**, or enter the local command **`::pohcluereset`**, then re-enter your house, open the detected travel menus, and walk through the other travel rooms. The command also works with the overlay hidden. Both actions reset only the current character's learned sources and house observations, preserve display and chat settings, and confirm the reset in local chat. The same actions can reset stale data after a game update. Renaming the plugin preserves the original per-character caches.
+
+## Display and chat settings
+
+**Overlay mode** offers three modes:
+
+- **Full** (default): the current panel with the facility, destination, estimated running time, and walking tiles.
+- **Compact**: the facility and destination, including the fairy ring code where applicable, without the heading or route statistics. Long names wrap within the usual maximum width. Route statuses use a single message.
+- **Hidden**: no recommendation or route-status panel. Learning, route calculation, destination highlights, and automatic menu scrolling continue.
+
+Initial house setup and the learning checklist always use the full panel, regardless of the selected mode. This includes setup after forgetting learned sources or discovering a facility that needs learning. Once setup is complete, the selected mode applies automatically. Setup guidance can still appear in your own house without an active clue.
+
+**Chat messages** is off by default and works independently of the overlay mode. When enabled, a local message such as `[POH Clue Teleports] Jewellery box: Fishing Guild` announces a clue step's first available recommendation and any change to its recommended facility or destination. New steps can announce the same teleport again. Reopening menus, ordinary loading, world hops, and recalculating the same recommendation do not repeat it. Setup and route-progress messages are not announced. Enabling chat during a clue announces the current recommendation once it is available.
 
 ## Distance and clue coverage
 
@@ -87,7 +99,7 @@ Start the development client yourself when ready:
 
 Source compiles to Java 11 bytecode, following the RuneLite plugin template. The macOS development task includes the native fullscreen adapter's required Java exports. The optional `gradle-local` helper uses a project-local JDK and Gradle cache when configured; `./gradle-local build --offline` works after dependencies have been cached.
 
-Enable **POH Clue Teleports** in the development client, enter your own house, and open only the detected travel menus to learn their available destinations. Read a clue with **Clue Scroll** enabled. The ordinary JAR at `build/libs/poh-clue-teleports-1.0.1.jar` is a development build artifact. Source is available at [ggaidelevicius/runelite-poh-clue-teleports](https://github.com/ggaidelevicius/runelite-poh-clue-teleports). Updates use versioned source commits submitted to Plugin Hub, where RuneLite reviews and merges the commit pin.
+Enable **POH Clue Teleports** in the development client, enter your own house, and open only the detected travel menus to learn their available destinations. Read a clue with **Clue Scroll** enabled. The ordinary JAR at `build/libs/poh-clue-teleports-1.0.2.jar` is a development build artifact. Source is available at [ggaidelevicius/runelite-poh-clue-teleports](https://github.com/ggaidelevicius/runelite-poh-clue-teleports). Updates use versioned source commits submitted to Plugin Hub, where RuneLite reviews and merges the commit pin.
 
 ## Manual verification
 
@@ -101,6 +113,8 @@ Automated tests do not establish live gameplay behavior. In a user-started devel
 6. With an obelisk built, compare accounts with and without the collected Wilderness Hard Diary reward. Only deterministic destination selection should enter the comparison. Check a mounted cape after its limited daily teleports have been used.
 7. Disable and re-enable the plugin. Confirm the overlay cleans up and returns once, with no sidebar button. Re-enter the house before learning new menus.
 8. With **Teleport Maps** enabled, open the spirit-tree, mounted Xeric, and POH obelisk maps in both classic and modern menu styles. Confirm learning completes and the recommended destination gets one outline on its clickable map button. Check an unavailable destination, a custom Xeric name, and a closed/reopened map. Other players’ houses must not update your cache or show guidance.
+9. Change **Overlay mode** between Full, Compact, and Hidden. Confirm Full retains the current panel, Compact shows only the facility and destination, and Hidden retains menu highlights and scrolling. With Hidden selected, use **`::pohcluereset`** and confirm the full setup panel returns, only this character's cache resets, and Hidden resumes after learning completes. Repeat setup with Compact selected and with no active clue in your own house.
+10. Enable **Chat messages**, including with Hidden selected. Confirm one local recommendation appears per clue step or changed teleport, with no repeats from menu reopening, loading, world hopping, or recalculating the same route. Check a new step that uses the same destination, enable chat during an active clue, and switch characters.
 
 ## Sources
 
