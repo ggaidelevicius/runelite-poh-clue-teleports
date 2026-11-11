@@ -278,18 +278,8 @@ public final class HouseTransportReader
 			case ObjectID.POH_NEXUS_PORTAL_3:
 			case ObjectID.POH_NEXUS_PORTAL_LEAGUE_5:
 				return Set.of(TeleportSource.PORTAL_NEXUS);
-			case ObjectID.POH_JEWELLERY_BOX_1:
-			case ObjectID.POH_JEWELLERY_BOX_2:
-			case ObjectID.POH_JEWELLERY_BOX_3:
-			case ObjectID.POH_JEWELLERY_BOX_1_COLOSSEUM:
-			case ObjectID.POH_JEWELLERY_BOX_2_COLOSSEUM:
-			case ObjectID.POH_JEWELLERY_BOX_3_COLOSSEUM:
-				return Set.of(TeleportSource.JEWELLERY_BOX);
 			default:
-				// Every native ID in this contiguous range is a built box with
-				// its current left-click destination, across all three tiers.
-				if (transformedObjectId >= ObjectID.POH_JEWELLERY_BOX_1_BASE
-					&& transformedObjectId <= ObjectID.POH_JEWELLERY_BOX_3_KHARID)
+				if (jewelleryBoxTier(transformedObjectId) > 0)
 				{
 					return Set.of(TeleportSource.JEWELLERY_BOX);
 				}
@@ -302,6 +292,71 @@ public final class HouseTransportReader
 					return Set.of(TeleportSource.MOUNTED_XERICS_TALISMAN);
 				}
 				return Collections.emptySet();
+		}
+	}
+
+	/** Built tier, including default destination variants, or zero for other objects. */
+	static int jewelleryBoxTier(int id)
+	{
+		if (id == ObjectID.POH_JEWELLERY_BOX_1 || id == ObjectID.POH_JEWELLERY_BOX_1_COLOSSEUM
+			|| id >= ObjectID.POH_JEWELLERY_BOX_1_BASE && id <= ObjectID.POH_JEWELLERY_BOX_1_WINTERTODT)
+		{
+			return 1;
+		}
+		if (id == ObjectID.POH_JEWELLERY_BOX_2 || id == ObjectID.POH_JEWELLERY_BOX_2_COLOSSEUM
+			|| id >= ObjectID.POH_JEWELLERY_BOX_2_BASE && id <= ObjectID.POH_JEWELLERY_BOX_2_FARMING_GUILD)
+		{
+			return 2;
+		}
+		if (id == ObjectID.POH_JEWELLERY_BOX_3 || id == ObjectID.POH_JEWELLERY_BOX_3_COLOSSEUM
+			|| id >= ObjectID.POH_JEWELLERY_BOX_3_BASE && id <= ObjectID.POH_JEWELLERY_BOX_3_KHARID)
+		{
+			return 3;
+		}
+		return 0;
+	}
+
+	/**
+	 * Whether a transformed house object is the fixture that offers this
+	 * recommended destination. Jewellery boxes must meet the destination's tier.
+	 * Portals and cape hangers must offer the destination themselves. Invoke on
+	 * the client thread.
+	 */
+	static boolean offers(Client client, ObjectComposition live, TeleportSource source, String destinationId)
+	{
+		if (live == null || source == null || destinationId == null)
+		{
+			return false;
+		}
+		int id = live.getId();
+		if (source == TeleportSource.JEWELLERY_BOX)
+		{
+			int tier = jewelleryBoxTier(id);
+			return tier > 0 && TeleportCatalog.byId(destinationId)
+				.map(TeleportCatalog::jewelleryTier)
+				.filter(required -> required > 0 && required <= tier)
+				.isPresent();
+		}
+		if (TeleportSource.menuSources().contains(source))
+		{
+			return interfaceSources(id).contains(source);
+		}
+		switch (source)
+		{
+			case PORTAL_CHAMBER:
+				return PORTALS.containsKey(id) && portalDestinations(client, live).contains(destinationId);
+			case CAPE_HANGER:
+				return CapeReader.read(client, id).map(ids -> ids.contains(destinationId)).orElse(false);
+			case WILDERNESS_OBELISK:
+				return id == ObjectID.POH_WILDERNESS_OBELISK;
+			case MOUNTED_GLORY:
+				return id == ObjectID.POH_TROPHY_AMULETOFGLORY_4;
+			case MOUNTED_MYTHICAL_CAPE:
+				return id == ObjectID.POH_TROPHY_MYTHICAL_CAPE;
+			case HOUSE_EXIT:
+				return id == ObjectID.POH_EXIT_PORTAL || id == ObjectID.POH_EXIT_PORTAL_WILDERNESS;
+			default:
+				return false;
 		}
 	}
 

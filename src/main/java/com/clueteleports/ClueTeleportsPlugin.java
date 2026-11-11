@@ -1,6 +1,7 @@
 package com.clueteleports;
 
 import com.google.inject.Provides;
+import java.awt.Color;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -37,6 +38,7 @@ import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.cluescrolls.ClueScrollPlugin;
 import net.runelite.client.plugins.cluescrolls.clues.ClueScroll;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +61,7 @@ public class ClueTeleportsPlugin extends Plugin
 	@Inject private PluginManager pluginManager;
 	@Inject private OverlayManager overlayManager;
 	@Inject private ClueTeleportsOverlay overlay;
+	@Inject private ModelOutlineRenderer outlineRenderer;
 	private final ClueTargetResolver targetResolver = new ClueTargetResolver();
 	private final FairyRingTravelLog fairyTravelLog = new FairyRingTravelLog();
 	private final NexusMenuScroll nexusMenuScroll = new NexusMenuScroll();
@@ -75,6 +78,7 @@ public class ClueTeleportsPlugin extends Plugin
 	private boolean ownHouse;
 	private HouseLearningOverlay learningOverlay;
 	private ClueMinimapOverlay minimapOverlay;
+	private HouseObjectOverlay houseObjectOverlay;
 	private volatile HouseLearningOverlay.Guidance guidance = new HouseLearningOverlay.Guidance(false,
 		Collections.emptySet(), null, null);
 	private volatile ClueTeleportsOverlay.Display display;
@@ -104,6 +108,9 @@ public class ClueTeleportsPlugin extends Plugin
 		overlayManager.add(learningOverlay);
 		minimapOverlay = new ClueMinimapOverlay(client, this::getMinimapTarget);
 		overlayManager.add(minimapOverlay);
+		houseObjectOverlay = new HouseObjectOverlay(client, this::getGuidance, this::getHouseObjectColor,
+			(object, color) -> outlineRenderer.drawOutline(object, 2, color, 4));
+		overlayManager.add(houseObjectOverlay);
 		clientThread.invokeLater(() -> refresh(false));
 	}
 
@@ -131,6 +138,8 @@ public class ClueTeleportsPlugin extends Plugin
 		learningOverlay = null;
 		if (minimapOverlay != null) overlayManager.remove(minimapOverlay);
 		minimapOverlay = null;
+		if (houseObjectOverlay != null) overlayManager.remove(houseObjectOverlay);
+		houseObjectOverlay = null;
 	}
 
 	@Subscribe
@@ -388,6 +397,12 @@ public class ClueTeleportsPlugin extends Plugin
 	WorldPoint getMinimapTarget()
 	{
 		return running && config.minimapArrow() ? arrivalGuidance.getTarget() : null;
+	}
+
+	/** Null hides the house outline. */
+	Color getHouseObjectColor()
+	{
+		return running && config.highlightHouseObject() ? config.houseObjectColor() : null;
 	}
 
 	private void invalidateRoute()

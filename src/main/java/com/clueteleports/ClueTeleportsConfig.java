@@ -1,5 +1,6 @@
 package com.clueteleports;
 
+import java.awt.Color;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -38,6 +39,28 @@ public interface ClueTeleportsConfig extends Config
 	default boolean minimapArrow()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = "highlightHouseObject",
+		name = "Highlight in house",
+		description = "Outline the recommended teleport in your house.",
+		position = 3
+	)
+	default boolean highlightHouseObject()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "houseObjectColor",
+		name = "Highlight colour",
+		description = "Colour of the outline around the recommended teleport.",
+		position = 4
+	)
+	default Color houseObjectColor()
+	{
+		return HouseLearningOverlay.RECOMMENDED;
 	}
 
 	enum OverlayMode

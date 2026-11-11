@@ -178,24 +178,13 @@ final class HouseInventory
 		{
 			return id;
 		}
-		// Verified RuneLite gameval ObjectID ranges contain only each tier's
-		// built default-destination variants, plus its Colosseum variant.
-		if (id == ObjectID.POH_JEWELLERY_BOX_1 || id == ObjectID.POH_JEWELLERY_BOX_1_COLOSSEUM
-			|| id >= ObjectID.POH_JEWELLERY_BOX_1_BASE && id <= ObjectID.POH_JEWELLERY_BOX_1_WINTERTODT)
+		switch (HouseTransportReader.jewelleryBoxTier(id))
 		{
-			return ObjectID.POH_JEWELLERY_BOX_1;
+			case 1: return ObjectID.POH_JEWELLERY_BOX_1;
+			case 2: return ObjectID.POH_JEWELLERY_BOX_2;
+			case 3: return ObjectID.POH_JEWELLERY_BOX_3;
+			default: return id;
 		}
-		if (id == ObjectID.POH_JEWELLERY_BOX_2 || id == ObjectID.POH_JEWELLERY_BOX_2_COLOSSEUM
-			|| id >= ObjectID.POH_JEWELLERY_BOX_2_BASE && id <= ObjectID.POH_JEWELLERY_BOX_2_FARMING_GUILD)
-		{
-			return ObjectID.POH_JEWELLERY_BOX_2;
-		}
-		if (id == ObjectID.POH_JEWELLERY_BOX_3 || id == ObjectID.POH_JEWELLERY_BOX_3_COLOSSEUM
-			|| id >= ObjectID.POH_JEWELLERY_BOX_3_BASE && id <= ObjectID.POH_JEWELLERY_BOX_3_KHARID)
-		{
-			return ObjectID.POH_JEWELLERY_BOX_3;
-		}
-		return id;
 	}
 
 	private static boolean validPosition(String position)

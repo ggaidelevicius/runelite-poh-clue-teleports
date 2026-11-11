@@ -30,6 +30,7 @@ You only need to do this once per character. To learn new destinations later, op
 - **Overlay mode**: **Full** (default) shows the route details, **Compact** shows only the teleport, and **Hidden** turns the panel off but keeps menu highlights.
 - **Chat messages**: posts the recommendation in chat. Off by default.
 - **Minimap arrow**: shows a guide arrow after you teleport. On by default.
+- **Highlight in house**: outlines the teleport to use in your house. On by default. Pick its colour with **Highlight colour**.
 
 ## Good to know
 
